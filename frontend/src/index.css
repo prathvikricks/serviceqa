@@ -1,0 +1,238 @@
+@import 'tailwindcss';
+/* Google Sans Flex (self-hosted via @fontsource, imported in main.tsx) is the
+   UI font, matching the marketing site. Geist Mono remains the mono face. */
+
+/* ============================================================
+   Design tokens — ported from the legacy app.css token system
+   (modern-minimal + true-black dark), with ElevenLabs-style
+   polish: more whitespace, larger radii, softer borders.
+   Dark mode toggles via [data-theme="dark"] on <html>.
+   ============================================================ */
+
+:root {
+  /* surfaces — a lightly tinted page with white cards, so cards separate
+     without needing heavy shadows */
+  --bg-body: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f5f5f5;
+  --bg-hover: #f2f2f2;
+
+  /* lines */
+  --border: #e5e5e5;
+  --border-light: #efefef;
+
+  /* text — neutral (R=G=B); a blue bias here reads as grey rather than black */
+  --text-primary: #0a0a0a;
+  --text-secondary: #525252;
+  --text-muted: #737373;
+
+  /* accent — green. This shade specifically because it has to work in both
+     directions: as type on white AND as a fill behind white text (5.0:1
+     either way). Brighter greens fail the fill case. */
+  --accent: #15803d;
+  --accent-hover: #166534;
+  --accent-soft: #f0fdf4;
+  --accent-border: #bbf7d0;
+  --on-accent: #ffffff;
+
+  /* neutral tone ramp — dark tiles carrying white glyphs */
+  --tone-1: #171717;
+  --tone-2: #262626;
+  --tone-3: #404040;
+  --tone-4: #525252;
+
+  /* status pairs: bg (soft) / fg (text) / border */
+  --success-bg: #ecfdf3; --success-fg: #047857; --success-border: #a7f3d0;
+  --warning-bg: #fff8eb; --warning-fg: #b45309; --warning-border: #fde68a;
+  --danger-bg:  #fef2f2; --danger-fg:  #b91c1c; --danger-border:  #fecaca;
+  --info-bg:    #ecfeff; --info-fg:    #0e7490; --info-border:    #a5f3fc;
+  --neutral-bg: #f3f4f6; --neutral-fg: #5b6470; --neutral-border: #e6e8eb;
+
+  /* solid danger fill (destructive buttons) — vivid in both themes */
+  --danger-solid: #dc2626; --danger-solid-hover: #b91c1c;
+
+  /* shadows — soft and low-contrast, matching the marketing site's cards */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 8px 24px -12px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 12px 32px -14px rgba(0, 0, 0, 0.16);
+  --shadow-lg: 0 20px 48px -18px rgba(0, 0, 0, 0.2);
+
+  /* radii — softer and larger, matching the marketing site's cards */
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+}
+
+[data-theme='dark'] {
+  /* Vercel-black: pure-black canvas, near-black cards, hairline borders. */
+  --bg-body: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #161616;
+  --bg-hover: #1a1a1a;
+
+  --border: #262626;
+  --border-light: #1a1a1a;
+
+  --text-primary: #ededed;
+  --text-secondary: #a1a1a1;
+  --text-muted: #6f6f6f;
+
+  /* Green accent, but a *lighter* one than light mode uses: #15803d on a
+     near-black canvas is far too dark to read. Fills still take white text. */
+  --accent: #4ade80;
+  --accent-hover: #86efac;
+  --accent-soft: rgba(74, 222, 128, 0.14);
+  --accent-border: rgba(74, 222, 128, 0.38);
+  --on-accent: #052e16;
+
+  /* Tone ramp inverts on dark: tiles become light, carrying dark glyphs. */
+  --tone-1: #ededed;
+  --tone-2: #d4d4d4;
+  --tone-3: #a3a3a3;
+  --tone-4: #737373;
+
+  --success-bg: rgba(34, 197, 94, 0.14); --success-fg: #6ee7a8; --success-border: rgba(34, 197, 94, 0.32);
+  --warning-bg: rgba(245, 158, 11, 0.14); --warning-fg: #fcd34d; --warning-border: rgba(245, 158, 11, 0.32);
+  --danger-bg:  rgba(239, 68, 68, 0.14);  --danger-fg:  #fca5a5; --danger-border:  rgba(239, 68, 68, 0.32);
+  --info-bg:    rgba(6, 182, 212, 0.14);  --info-fg:    #67e8f9; --info-border:    rgba(6, 182, 212, 0.32);
+  --neutral-bg: #1a1a1a; --neutral-fg: #a1a1a1; --neutral-border: #2e2e2e;
+
+  --danger-solid: #e5484d; --danger-solid-hover: #f2565b;
+
+  /* Flat, Vercel-style — cards read via borders, not shadows. */
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Expose the tokens to Tailwind utilities (bg-surface, text-secondary, etc.) */
+@theme inline {
+  --color-body: var(--bg-body);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hover: var(--bg-hover);
+
+  --color-border: var(--border);
+  --color-border-light: var(--border-light);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-on-accent: var(--on-accent);
+
+  --color-tone-1: var(--tone-1);
+  --color-tone-2: var(--tone-2);
+  --color-tone-3: var(--tone-3);
+  --color-tone-4: var(--tone-4);
+
+  --color-success-bg: var(--success-bg);
+  --color-success-fg: var(--success-fg);
+  --color-success-border: var(--success-border);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-border: var(--warning-border);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-border: var(--danger-border);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: var(--danger-solid-hover);
+  --color-info-bg: var(--info-bg);
+  --color-info-fg: var(--info-fg);
+  --color-info-border: var(--info-border);
+  --color-neutral-bg: var(--neutral-bg);
+  --color-neutral-fg: var(--neutral-fg);
+  --color-neutral-border: var(--neutral-border);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --font-sans: 'Geist Variable', 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-body);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Markdown rendering inside agent chat bubbles. Kept compact to sit well in a
+   speech bubble; code blocks scroll horizontally rather than stretch the page. */
+.md-body > :first-child { margin-top: 0; }
+.md-body > :last-child { margin-bottom: 0; }
+.md-body p { margin: 0.5em 0; }
+.md-body ul, .md-body ol { margin: 0.5em 0; padding-left: 1.4em; }
+.md-body li { margin: 0.15em 0; }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+  margin: 0.7em 0 0.35em; font-weight: 600; line-height: 1.3;
+}
+.md-body h1 { font-size: 1.15em; }
+.md-body h2 { font-size: 1.08em; }
+.md-body h3 { font-size: 1em; }
+.md-body a { color: var(--accent); text-decoration: underline; }
+.md-body code {
+  font-family: var(--font-mono);
+  font-size: 0.85em; background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: 6px; padding: 0.1em 0.35em;
+}
+.md-body pre {
+  margin: 0.5em 0; padding: 0.7em 0.85em; background: var(--surface);
+  border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.md-body pre code { background: none; border: 0; padding: 0; font-size: 0.82em; }
+.md-body blockquote {
+  margin: 0.5em 0; padding-left: 0.8em; border-left: 3px solid var(--border);
+  color: var(--text-secondary);
+}
+.md-body table { border-collapse: collapse; margin: 0.5em 0; display: block; overflow-x: auto; }
+.md-body th, .md-body td { border: 1px solid var(--border); padding: 0.3em 0.6em; text-align: left; }
+
+/* --- Auth split-screen branding --- */
+/* The spin/float/glow keyframes went with the CSS wireframe cubes; the
+   background is a WebGL dithered-wave field now. Only the logo tilt remains. */
+@keyframes rz-tilt {
+  0%, 100% { transform: perspective(1100px) rotateY(-11deg) rotateX(6deg) translateY(0); }
+  50%      { transform: perspective(1100px) rotateY(11deg) rotateX(-6deg) translateY(-12px); }
+}
+
+/* Respect users who prefer less motion — neutralize hover-lift/scale/transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

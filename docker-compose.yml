@@ -1,0 +1,70 @@
+services:
+  backend:
+    build: ./backend
+    container_name: evnmanager-api
+    ports:
+      - "5001:5000"
+    environment:
+      - FLASK_ENV=production
+      # SET THIS to your team's timezone (e.g. Asia/Kolkata, Europe/London).
+      # Request windows are stored as naive local times, so a container left on
+      # UTC while the team is on UTC+5:30 arms every job 5½ hours late.
+      - TZ=${TZ:-UTC}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      # Keep this stable across deploys — it decrypts stored cloud credentials.
+      # Rotating it (or leaving it unset while rotating SECRET_KEY) orphans them.
+      - CRED_KEY=${CRED_KEY:-}
+      - DATABASE_URL=postgresql://evnmanager:${DB_PASSWORD:-evnmanager123}@db:5432/evnmanager
+      # The SPA is served same-origin through nginx, so CORS isn't used in this
+      # setup; this only matters if you point a separately-hosted SPA here.
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
+      # Cookies are sent over plain HTTP in local compose — set to 0 only here.
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-0}
+      # APScheduler is in-process: more than one worker arms every job twice.
+      - GUNICORN_WORKERS=1
+      - GUNICORN_THREADS=8
+      - SEED_ADMIN_USERNAME=${SEED_ADMIN_USERNAME:-admin}
+      - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL:-admin@example.com}
+      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-admin123}
+      # Set SEED_DEMO=1 to plant the mock demo project on first boot.
+      - SEED_DEMO=${SEED_DEMO:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    container_name: evnmanager-web
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: evnmanager-db
+    environment:
+      - POSTGRES_DB=evnmanager
+      - POSTGRES_USER=evnmanager
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-evnmanager123}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evnmanager"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pg_data:
