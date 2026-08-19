@@ -1,9 +1,9 @@
 services:
-  backend:
+  backendenvapi:
     build: ./backend
     container_name: evnmanager-api
-    ports:
-      - "5001:5000"
+    expose:
+      - "5000"
     environment:
       - FLASK_ENV=production
       # SET THIS to your team's timezone (e.g. Asia/Kolkata, Europe/London).
@@ -14,7 +14,7 @@ services:
       # Keep this stable across deploys — it decrypts stored cloud credentials.
       # Rotating it (or leaving it unset while rotating SECRET_KEY) orphans them.
       - CRED_KEY=${CRED_KEY:-}
-      - DATABASE_URL=postgresql://evnmanager:${DB_PASSWORD:-evnmanager123}@db:5432/evnmanager
+      - DATABASE_URL=postgresql://evnmanager:${DB_PASSWORD:-evnmanager123}@evnmanager-db:5432/evnmanager
       # The SPA is served same-origin through nginx, so CORS isn't used in this
       # setup; this only matters if you point a separately-hosted SPA here.
       - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
@@ -28,8 +28,10 @@ services:
       - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-admin123}
       # Set SEED_DEMO=1 to plant the mock demo project on first boot.
       - SEED_DEMO=${SEED_DEMO:-}
+    networks:
+      - shared
     depends_on:
-      db:
+      envdb:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -39,16 +41,18 @@ services:
       retries: 3
       start_period: 20s
 
-  frontend:
+  frontendenv:
     build: ./frontend
     container_name: evnmanager-web
-    ports:
-      - "3000:80"
+    expose:
+      - "80"
     depends_on:
-      - backend
+      - backendenvapi
     restart: unless-stopped
+    networks:
+      - shared
 
-  db:
+  envdb:
     image: postgres:16-alpine
     container_name: evnmanager-db
     environment:
@@ -56,15 +60,21 @@ services:
       - POSTGRES_USER=evnmanager
       - POSTGRES_PASSWORD=${DB_PASSWORD:-evnmanager123}
     volumes:
-      - pg_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - ./pg_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U evnmanager"]
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - shared
 
 volumes:
   pg_data:
+
+networks:
+  shared:
+    external: true
