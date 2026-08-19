@@ -28,6 +28,14 @@ services:
       - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-admin123}
       # Set SEED_DEMO=1 to plant the mock demo project on first boot.
       - SEED_DEMO=${SEED_DEMO:-}
+      # Git repo-creation requests. The approver picks the provider at approval
+      # time; only providers with a token set here are offered. Leave blank to
+      # disable that provider.
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_ORG=${GITHUB_ORG:-}
+      - GITLAB_TOKEN=${GITLAB_TOKEN:-}
+      - GITLAB_URL=${GITLAB_URL:-}
+      - GITLAB_NAMESPACE_ID=${GITLAB_NAMESPACE_ID:-}
     networks:
       - shared
     depends_on:

@@ -5,9 +5,18 @@ export interface RequestSummary {
   id: number
   requester: string
   requester_id: number
-  environment_id: number
-  environment: string
-  project: string
+  request_type: 'service' | 'repo'
+  environment_id: number | null
+  environment: string | null
+  project: string | null
+  project_id: number | null
+  // Repo-request fields (null for service requests).
+  repo_name: string | null
+  repo_description: string | null
+  repo_visibility: 'private' | 'public' | null
+  git_provider: string | null
+  repo_url: string | null
+  git_error: string | null
   action_type: string
   start_time: string | null
   end_time: string | null

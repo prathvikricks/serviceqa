@@ -8,7 +8,9 @@ import { LoginPage } from './features/auth/LoginPage'
 import { DashboardPage } from './features/dashboard/DashboardPage'
 import { ActivityPage } from './features/dashboard/ActivityPage'
 import { RequestsListPage } from './features/requests/RequestsListPage'
+import { NewRequestChooser } from './features/requests/NewRequestChooser'
 import { NewRequestPage } from './features/requests/NewRequestPage'
+import { NewRepoRequestPage } from './features/requests/NewRepoRequestPage'
 import { RequestDetailPage } from './features/requests/RequestDetailPage'
 import { ApprovalsPage } from './features/approvals/ApprovalsPage'
 import { SecretsPage } from './features/secrets/SecretsPage'
@@ -45,7 +47,9 @@ export default function App() {
                 <Route path="/activity" element={<ActivityPage />} />
 
                 <Route path="/requests" element={<RequestsListPage />} />
-                <Route path="/requests/new" element={<NewRequestPage />} />
+                <Route path="/requests/new" element={<NewRequestChooser />} />
+                <Route path="/requests/new/service" element={<NewRequestPage />} />
+                <Route path="/requests/new/repo" element={<NewRepoRequestPage />} />
                 <Route path="/requests/:id" element={<RequestDetailPage />} />
 
                 <Route path="/approvals" element={<ApprovalsPage />} />

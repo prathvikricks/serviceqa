@@ -6,7 +6,7 @@ import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { Table, THead, TRow, TCell } from '../../components/ui/Table'
 import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { Field, Input } from '../../components/ui/Input'
+import { Field, Input, Select } from '../../components/ui/Input'
 import { Modal, ConfirmDialog } from '../../components/ui/Modal'
 import { useToast } from '../../components/ui/Toast'
 import { PageHeader, Spinner, ErrorState } from '../../components/ui/Page'
@@ -75,6 +75,7 @@ export function RequestDetailPage() {
   const [extendReason, setExtendReason] = useState('')
   const [decision, setDecision] = useState<'approve' | 'decline' | null>(null)
   const [decisionComment, setDecisionComment] = useState('')
+  const [provider, setProvider] = useState('')
   const [confirmStop, setConfirmStop] = useState(false)
 
   const { data, isLoading, error } = useQuery({
@@ -115,8 +116,11 @@ export function RequestDetailPage() {
   })
 
   const decisionMutation = useMutation({
-    mutationFn: (vars: { decision: 'approve' | 'decline'; comment: string }) =>
-      api.post(`/approvals/${id}/${vars.decision}`, { comment: vars.comment }),
+    mutationFn: (vars: { decision: 'approve' | 'decline'; comment: string; provider?: string }) =>
+      api.post(`/approvals/${id}/${vars.decision}`, {
+        comment: vars.comment,
+        ...(vars.provider ? { provider: vars.provider } : {}),
+      }),
     onSuccess: (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['request', id] })
       queryClient.invalidateQueries({ queryKey: ['requests'] })
@@ -124,8 +128,16 @@ export function RequestDetailPage() {
       notify(vars.decision === 'approve' ? 'Request approved.' : 'Request declined.', 'success')
       setDecision(null)
       setDecisionComment('')
+      setProvider('')
     },
     onError: (err) => notify(err instanceof ApiError ? err.message : 'Failed to submit decision', 'danger'),
+  })
+
+  const isRepo = data?.request_type === 'repo'
+  const providersQuery = useQuery({
+    queryKey: ['git-providers'],
+    queryFn: () => api.get<{ providers: string[] }>('/git/providers'),
+    enabled: isRepo && decision === 'approve',
   })
 
   const stopMutation = useMutation({
@@ -143,16 +155,22 @@ export function RequestDetailPage() {
   if (error) return <ErrorState message="Failed to load request." />
   if (!data) return null
 
-  const canCancel = data.status === 'pending' || data.status === 'approved'
-  const canExtend = data.status === 'active'
-  const canDecide = isDevops && data.status === 'pending'
-  const canStop = isDevops && (data.status === 'active' || data.status === 'starting')
+  const canCancel = data.status === 'pending' || (!isRepo && data.status === 'approved')
+  const canExtend = !isRepo && data.status === 'active'
+  // Repo requests can be (re)approved when pending or after a failed attempt.
+  const canDecide =
+    isDevops && (data.status === 'pending' || (isRepo && data.status === 'failed'))
+  const canStop = isDevops && !isRepo && (data.status === 'active' || data.status === 'starting')
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={`Request #${data.id}`}
-        subtitle={`${data.project} · ${data.environment}`}
+        subtitle={
+          isRepo
+            ? `${data.project ?? 'No project'} · Repo: ${data.repo_name}`
+            : `${data.project} · ${data.environment}`
+        }
         action={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => navigate('/requests')}>
@@ -161,11 +179,13 @@ export function RequestDetailPage() {
             {canDecide && (
               <>
                 <Button onClick={() => { setDecision('approve'); setDecisionComment('') }}>
-                  Approve
+                  {data.status === 'failed' ? 'Retry' : 'Approve'}
                 </Button>
-                <Button variant="danger" onClick={() => { setDecision('decline'); setDecisionComment('') }}>
-                  Decline
-                </Button>
+                {data.status === 'pending' && (
+                  <Button variant="danger" onClick={() => { setDecision('decline'); setDecisionComment('') }}>
+                    Decline
+                  </Button>
+                )}
               </>
             )}
             {canExtend && <Button onClick={() => setExtendOpen(true)}>Extend</Button>}
@@ -186,31 +206,64 @@ export function RequestDetailPage() {
       <Card>
         <CardHeader title="Overview" action={<StatusBadge status={data.status} />} />
         <CardBody>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            <Detail label="Requester">{data.requester}</Detail>
-            <Detail label="Project">{data.project}</Detail>
-            <Detail label="Environment">{data.environment}</Detail>
-            <Detail label="Action">{titleCase(data.action_type)}</Detail>
-            {data.schedule_type === 'weekly' && (
-              <Detail label="Repeats">{data.recurrence_label ?? 'Weekly'}</Detail>
-            )}
-            <Detail label={data.schedule_type === 'weekly' ? 'Next start' : 'Start'}>
-              {fmtDT(data.start_time)}
-            </Detail>
-            <Detail label={data.schedule_type === 'weekly' ? 'Next end' : 'End'}>
-              {fmtDT(data.end_time)}
-            </Detail>
-            <Detail label="Duration">{durationHours(data.start_time, data.end_time)}</Detail>
-            <Detail label="Estimated cost">{fmtCost(data.estimated_cost)}</Detail>
-            <Detail label="Reason">{data.reason}</Detail>
-            {data.parent_request_id != null && (
-              <Detail label="Extension of">
-                <Link to={`/requests/${data.parent_request_id}`} className="text-accent hover:underline">
-                  #{data.parent_request_id}
-                </Link>
+          {isRepo ? (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <Detail label="Requester">{data.requester}</Detail>
+              <Detail label="Project">{data.project ?? '—'}</Detail>
+              <Detail label="Repository">{data.repo_name}</Detail>
+              <Detail label="Visibility">{data.repo_visibility ?? '—'}</Detail>
+              <Detail label="Provider">
+                {data.git_provider ? titleCase(data.git_provider) : '—'}
               </Detail>
-            )}
-          </div>
+              <Detail label="Repository URL">
+                {data.repo_url ? (
+                  <a
+                    href={data.repo_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent hover:underline break-all"
+                  >
+                    {data.repo_url}
+                  </a>
+                ) : (
+                  '—'
+                )}
+              </Detail>
+              <Detail label="Description">{data.repo_description ?? '—'}</Detail>
+              <Detail label="Reason">{data.reason}</Detail>
+              {data.git_error && (
+                <Detail label="Last error">
+                  <span className="text-danger-fg">{data.git_error}</span>
+                </Detail>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <Detail label="Requester">{data.requester}</Detail>
+              <Detail label="Project">{data.project}</Detail>
+              <Detail label="Environment">{data.environment}</Detail>
+              <Detail label="Action">{titleCase(data.action_type)}</Detail>
+              {data.schedule_type === 'weekly' && (
+                <Detail label="Repeats">{data.recurrence_label ?? 'Weekly'}</Detail>
+              )}
+              <Detail label={data.schedule_type === 'weekly' ? 'Next start' : 'Start'}>
+                {fmtDT(data.start_time)}
+              </Detail>
+              <Detail label={data.schedule_type === 'weekly' ? 'Next end' : 'End'}>
+                {fmtDT(data.end_time)}
+              </Detail>
+              <Detail label="Duration">{durationHours(data.start_time, data.end_time)}</Detail>
+              <Detail label="Estimated cost">{fmtCost(data.estimated_cost)}</Detail>
+              <Detail label="Reason">{data.reason}</Detail>
+              {data.parent_request_id != null && (
+                <Detail label="Extension of">
+                  <Link to={`/requests/${data.parent_request_id}`} className="text-accent hover:underline">
+                    #{data.parent_request_id}
+                  </Link>
+                </Detail>
+              )}
+            </div>
+          )}
         </CardBody>
       </Card>
 
@@ -232,6 +285,8 @@ export function RequestDetailPage() {
         </Card>
       )}
 
+      {!isRepo && (
+      <>
       <Card>
         <CardHeader title="Services" />
         {data.services.length === 0 ? (
@@ -278,6 +333,8 @@ export function RequestDetailPage() {
           </Table>
         )}
       </Card>
+      </>
+      )}
 
       <Card>
         <CardHeader title="Activity" />
@@ -339,7 +396,7 @@ export function RequestDetailPage() {
         message="This immediately stops all services in this environment and ends active requests."
         confirmLabel="Emergency stop"
         danger
-        onConfirm={() => stopMutation.mutate(data.environment_id)}
+        onConfirm={() => data.environment_id != null && stopMutation.mutate(data.environment_id)}
         onCancel={() => setConfirmStop(false)}
       />
 
@@ -354,33 +411,65 @@ export function RequestDetailPage() {
             </Button>
             <Button
               variant={decision === 'decline' ? 'danger' : 'primary'}
-              onClick={() =>
-                decision &&
-                decisionMutation.mutate({ decision, comment: decisionComment.trim() })
-              }
+              onClick={() => {
+                if (!decision) return
+                const repoApprove = isRepo && decision === 'approve'
+                if (repoApprove && !provider) {
+                  notify('Choose a Git provider to create the repo on.', 'danger')
+                  return
+                }
+                decisionMutation.mutate({
+                  decision,
+                  comment: decisionComment.trim(),
+                  provider: repoApprove ? provider : undefined,
+                })
+              }}
               disabled={decisionMutation.isPending}
             >
               {decisionMutation.isPending
                 ? 'Saving…'
                 : decision === 'approve'
-                  ? 'Approve'
+                  ? isRepo
+                    ? 'Create repo'
+                    : 'Approve'
                   : 'Decline'}
             </Button>
           </>
         }
       >
-        <Field label="Comment (optional)">
-          <textarea
-            className="w-full min-h-20 rounded-[var(--radius-sm)] border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none focus:ring-2 focus:ring-accent/30"
-            value={decisionComment}
-            onChange={(e) => setDecisionComment(e.target.value)}
-            placeholder={
-              decision === 'approve'
-                ? 'Add an optional note for the requester…'
-                : 'Reason for decline…'
-            }
-          />
-        </Field>
+        <div className="space-y-3">
+          {isRepo && decision === 'approve' && (
+            <Field label="Create on">
+              <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                <option value="">
+                  {providersQuery.isFetching ? 'Loading…' : 'Select a Git provider…'}
+                </option>
+                {(providersQuery.data?.providers ?? []).map((p) => (
+                  <option key={p} value={p}>
+                    {titleCase(p)}
+                  </option>
+                ))}
+              </Select>
+              {providersQuery.data && providersQuery.data.providers.length === 0 && (
+                <p className="mt-1 text-xs text-danger-fg">
+                  No Git provider is configured on the server (set GITHUB_TOKEN or GITLAB_TOKEN).
+                </p>
+              )}
+            </Field>
+          )}
+          <Field label="Comment (optional)">
+            <textarea
+              className="w-full min-h-20 rounded-[var(--radius-sm)] border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none focus:ring-2 focus:ring-accent/30"
+              value={decisionComment}
+              onChange={(e) => setDecisionComment(e.target.value)}
+              placeholder={
+                decision === 'approve'
+                  ? 'Add an optional note for the requester…'
+                  : 'Reason for decline…'
+              }
+            />
+          </Field>
+        </div>
       </Modal>
     </div>
   )
