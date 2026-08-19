@@ -112,8 +112,17 @@ export function RequestsListPage() {
                   className="cursor-pointer border-t border-border-light hover:bg-hover"
                 >
                   <TCell className="font-medium">#{r.id}</TCell>
-                  <TCell>{r.project}</TCell>
-                  <TCell className="text-text-secondary">{r.environment}</TCell>
+                  <TCell>{r.project ?? '—'}</TCell>
+                  <TCell className="text-text-secondary">
+                    {r.request_type === 'repo' ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Badge tone="info">Repo</Badge>
+                        {r.repo_name}
+                      </span>
+                    ) : (
+                      r.environment
+                    )}
+                  </TCell>
                   {isDevops && <TCell className="text-text-secondary">{r.requester}</TCell>}
                   <TCell className="text-text-secondary">
                     <div className="flex items-center gap-1.5">

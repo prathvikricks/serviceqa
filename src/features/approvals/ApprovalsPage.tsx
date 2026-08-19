@@ -8,9 +8,11 @@ import { Table, THead, TRow, TCell } from '../../components/ui/Table'
 import { StatusBadge, Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
-import { Field } from '../../components/ui/Input'
+import { Field, Select } from '../../components/ui/Input'
 import { useToast } from '../../components/ui/Toast'
-import type { ApprovalRequest } from './types'
+import type { ApprovalRequest, GitProvidersResponse } from './types'
+
+const PROVIDER_LABELS: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab' }
 
 // Row augments the shared request with approval-list-only fields.
 interface ApprovalRow extends ApprovalRequest {
@@ -67,6 +69,7 @@ export function ApprovalsPage() {
   const [status, setStatus] = useState('pending')
   const [active, setActive] = useState<{ req: ApprovalRequest; decision: Decision } | null>(null)
   const [comment, setComment] = useState('')
+  const [provider, setProvider] = useState('')
   const queryClient = useQueryClient()
   const { notify } = useToast()
 
@@ -75,9 +78,21 @@ export function ApprovalsPage() {
     queryFn: () => api.get<ApprovalsData>(`/approvals?status=${status}`),
   })
 
+  // A repo request needs the approver to pick where to create it; only fetch
+  // the configured providers when that modal is actually open.
+  const isRepoApprove = active?.req.request_type === 'repo' && active?.decision === 'approve'
+  const providersQuery = useQuery({
+    queryKey: ['git-providers'],
+    queryFn: () => api.get<GitProvidersResponse>('/git/providers'),
+    enabled: isRepoApprove,
+  })
+
   const mutation = useMutation({
-    mutationFn: (vars: { id: number; decision: Decision; comment: string }) =>
-      api.post(`/approvals/${vars.id}/${vars.decision}`, { comment: vars.comment }),
+    mutationFn: (vars: { id: number; decision: Decision; comment: string; provider?: string }) =>
+      api.post(`/approvals/${vars.id}/${vars.decision}`, {
+        comment: vars.comment,
+        ...(vars.provider ? { provider: vars.provider } : {}),
+      }),
     onSuccess: (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['approvals'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
@@ -90,16 +105,27 @@ export function ApprovalsPage() {
   function openModal(req: ApprovalRequest, decision: Decision) {
     setActive({ req, decision })
     setComment('')
+    setProvider('')
   }
 
   function closeModal() {
     setActive(null)
     setComment('')
+    setProvider('')
   }
 
   function submit() {
     if (!active) return
-    mutation.mutate({ id: active.req.id, decision: active.decision, comment: comment.trim() })
+    if (isRepoApprove && !provider) {
+      notify('Choose a Git provider to create the repo on.', 'danger')
+      return
+    }
+    mutation.mutate({
+      id: active.req.id,
+      decision: active.decision,
+      comment: comment.trim(),
+      provider: isRepoApprove ? provider : undefined,
+    })
   }
 
   return (
@@ -141,8 +167,17 @@ export function ApprovalsPage() {
                       {r.parent_request_id != null && <Badge tone="info">Extension</Badge>}
                     </div>
                   </TCell>
-                  <TCell>{r.project}</TCell>
-                  <TCell className="text-text-secondary">{r.environment}</TCell>
+                  <TCell>{r.project ?? '—'}</TCell>
+                  <TCell className="text-text-secondary">
+                    {r.request_type === 'repo' ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Badge tone="info">Repo</Badge>
+                        {r.repo_name}
+                      </span>
+                    ) : (
+                      r.environment
+                    )}
+                  </TCell>
                   <TCell className="text-text-secondary">{r.requester}</TCell>
                   <TCell className="capitalize">{r.action_type.replace(/_/g, ' ')}</TCell>
                   <TCell className="max-w-xs text-text-secondary">
@@ -157,14 +192,17 @@ export function ApprovalsPage() {
                     <StatusBadge status={r.status} />
                   </TCell>
                   <TCell>
-                    {r.status === 'pending' && (
+                    {(r.status === 'pending' ||
+                      (r.request_type === 'repo' && r.status === 'failed')) && (
                       <div className="flex gap-2">
                         <Button size="sm" onClick={() => openModal(r, 'approve')}>
-                          Approve
+                          {r.status === 'failed' ? 'Retry' : 'Approve'}
                         </Button>
-                        <Button size="sm" variant="danger" onClick={() => openModal(r, 'decline')}>
-                          Decline
-                        </Button>
+                        {r.status === 'pending' && (
+                          <Button size="sm" variant="danger" onClick={() => openModal(r, 'decline')}>
+                            Decline
+                          </Button>
+                        )}
                       </div>
                     )}
                   </TCell>
@@ -204,10 +242,45 @@ export function ApprovalsPage() {
       >
         {active && (
           <div className="space-y-3">
-            <p className="text-text-secondary">
-              {active.req.project} · {active.req.environment} · requested by{' '}
-              {active.req.requester}
-            </p>
+            {active.req.request_type === 'repo' ? (
+              <p className="text-text-secondary">
+                Repo <span className="font-medium text-text-primary">{active.req.repo_name}</span>
+                {' '}({active.req.repo_visibility})
+                {active.req.project ? ` · ${active.req.project}` : ''} · requested by{' '}
+                {active.req.requester}
+              </p>
+            ) : (
+              <p className="text-text-secondary">
+                {active.req.project} · {active.req.environment} · requested by{' '}
+                {active.req.requester}
+              </p>
+            )}
+
+            {isRepoApprove && (
+              <Field label="Create on">
+                <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                  <option value="">
+                    {providersQuery.isFetching ? 'Loading…' : 'Select a Git provider…'}
+                  </option>
+                  {(providersQuery.data?.providers ?? []).map((p) => (
+                    <option key={p} value={p}>
+                      {PROVIDER_LABELS[p] ?? p}
+                    </option>
+                  ))}
+                </Select>
+                {providersQuery.data && providersQuery.data.providers.length === 0 && (
+                  <p className="mt-1 text-xs text-danger-fg">
+                    No Git provider is configured on the server (set GITHUB_TOKEN or GITLAB_TOKEN).
+                  </p>
+                )}
+                {active.req.git_error && (
+                  <p className="mt-1 text-xs text-danger-fg">
+                    Previous attempt failed: {active.req.git_error}
+                  </p>
+                )}
+              </Field>
+            )}
+
             <Field label="Comment (optional)">
               <textarea
                 className={textareaClass}
