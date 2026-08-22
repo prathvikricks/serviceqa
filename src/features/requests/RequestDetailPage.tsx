@@ -12,7 +12,7 @@ import { useToast } from '../../components/ui/Toast'
 import { PageHeader, Spinner, ErrorState } from '../../components/ui/Page'
 import { Timeline, type TimelineItem } from '../../components/ui/Timeline'
 import { useAuth } from '../../auth/AuthContext'
-import type { AuditEntry, RequestDetail } from './types'
+import type { AuditEntry, EnvironmentsResponse, RequestDetail } from './types'
 
 const LIVE_STATUSES = ['approved', 'starting', 'active', 'stopping']
 
@@ -74,6 +74,9 @@ export function RequestDetailPage() {
   const [newEndTime, setNewEndTime] = useState('')
   const [extendReason, setExtendReason] = useState('')
   const [decision, setDecision] = useState<'approve' | 'decline' | null>(null)
+  const [adjustOpen, setAdjustOpen] = useState(false)
+  const [adjustEnv, setAdjustEnv] = useState<string>('')
+  const [adjustServices, setAdjustServices] = useState<number[] | null>(null)
   const [decisionComment, setDecisionComment] = useState('')
   const [provider, setProvider] = useState('')
   const [confirmStop, setConfirmStop] = useState(false)
@@ -151,6 +154,29 @@ export function RequestDetailPage() {
     onError: (err) => notify(err instanceof ApiError ? err.message : 'Failed to stop', 'danger'),
   })
 
+  // Environments of this request's project, so the approver can move it.
+  const { data: envData } = useQuery({
+    queryKey: ['project-environments', data?.project_id ?? data?.environment_id, adjustOpen],
+    queryFn: () =>
+      api.get<EnvironmentsResponse>(
+        `/projects/${data!.project_id}/environments`),
+    enabled: adjustOpen && !!data?.project_id,
+  })
+
+  const adjust = useMutation({
+    mutationFn: (payload: Record<string, unknown>) =>
+      api.patch(`/approvals/${id}/adjust`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['request', id] })
+      queryClient.invalidateQueries({ queryKey: ['approvals'] })
+      notify('Request updated.', 'success')
+      setAdjustOpen(false)
+      setAdjustServices(null)
+    },
+    onError: (err) =>
+      notify(err instanceof ApiError ? err.message : 'Could not adjust', 'danger'),
+  })
+
   if (isLoading) return <Spinner label="Loading request…" />
   if (error) return <ErrorState message="Failed to load request." />
   if (!data) return null
@@ -161,6 +187,10 @@ export function RequestDetailPage() {
   const canDecide =
     isDevops && (data.status === 'pending' || (isRepo && data.status === 'failed'))
   const canStop = isDevops && !isRepo && (data.status === 'active' || data.status === 'starting')
+  // The requester asked for an outcome, not a machine list. Before approving,
+  // the approver can point the request at the right environment and pick which
+  // services actually start.
+  const canAdjust = isDevops && !isRepo && data.status === 'pending'
 
   return (
     <div className="space-y-6">
@@ -173,6 +203,20 @@ export function RequestDetailPage() {
         }
         action={
           <div className="flex gap-2">
+            {canAdjust && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  // Seed from what the request actually has, so the dialog
+                  // reflects reality instead of implying everything is selected.
+                  setAdjustServices(data.services.map((s) => s.cloud_service_id))
+                  setAdjustEnv(String(data.environment_id ?? ''))
+                  setAdjustOpen(true)
+                }}
+              >
+                Adjust
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => navigate('/requests')}>
               Back
             </Button>
@@ -342,6 +386,90 @@ export function RequestDetailPage() {
           <Timeline items={activityItems(data.activity)} />
         </CardBody>
       </Card>
+
+      <Modal
+        open={adjustOpen}
+        onClose={() => setAdjustOpen(false)}
+        title="Adjust before approving"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAdjustOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={adjust.isPending}
+              onClick={() => {
+                const payload: Record<string, unknown> = {}
+                if (adjustEnv && Number(adjustEnv) !== data.environment_id) {
+                  payload.environment_id = Number(adjustEnv)
+                }
+                if (adjustServices) payload.service_ids = adjustServices
+                adjust.mutate(payload)
+              }}
+            >
+              {adjust.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary">
+            The requester asked for an outcome, not a machine list. Point this at
+            the right environment and choose what actually starts.
+          </p>
+
+          <Field label="Environment">
+            <Select
+              value={adjustEnv || String(data.environment_id ?? '')}
+              onChange={(e) => {
+                setAdjustEnv(e.target.value)
+                // Selections belong to the old environment; start clean.
+                setAdjustServices(null)
+              }}
+            >
+              {envData?.environments.map((env) => (
+                <option key={env.id} value={env.id}>
+                  {env.display_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Services to act on" hint="Leave all ticked to use the whole environment.">
+            <div className="space-y-2 pt-1">
+              {envData?.environments
+                .find((env) => String(env.id) === (adjustEnv || String(data.environment_id)))
+                ?.services.map((svc) => {
+                  const selected =
+                    adjustServices === null ? true : adjustServices.includes(svc.id)
+
+                  return (
+                    <label key={svc.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        className="accent-[var(--accent)]"
+                        onChange={(e) => {
+                          const all = envData!.environments
+                            .find((env) => String(env.id) === (adjustEnv || String(data.environment_id)))!
+                            .services.map((x) => x.id)
+                          const current = adjustServices === null ? all : adjustServices
+                          setAdjustServices(
+                            e.target.checked
+                              ? [...current, svc.id]
+                              : current.filter((x) => x !== svc.id),
+                          )
+                        }}
+                      />
+                      {svc.name}
+                      <span className="text-xs text-text-muted">{svc.type}</span>
+                    </label>
+                  )
+                })}
+            </div>
+          </Field>
+        </div>
+      </Modal>
 
       <ConfirmDialog
         open={confirmCancel}

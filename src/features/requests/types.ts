@@ -35,6 +35,7 @@ export interface RequestSummary {
 
 export interface RequestServiceItem {
   id: number
+  cloud_service_id: number
   name: string
   type: string
   action_status: string | null
