@@ -133,7 +133,7 @@ export function AppLayout() {
         >
           {!collapsed && (
             <div className="flex items-center px-2">
-              <Brand className="h-5" />
+              <Brand className="h-8" />
             </div>
           )}
           {collapsed ? (
