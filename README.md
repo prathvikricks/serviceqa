@@ -60,6 +60,23 @@ no SDK calls, no credentials, no spend — so the app is fully demoable. Only
 `real` reaches AWS (boto3) or Azure. `CloudManagerFactory` is the single gate;
 the cloud SDKs are imported lazily, so a mock-only deploy never needs them.
 
+## Chat intake
+
+Developers who know the outcome they want but not the fields can describe it in
+plain language at **New Request → Not sure what you need?**. The agent asks
+follow-ups, then hands over a prefilled request form — a service window or a
+repo request. It **proposes only**: it never writes to the database, and every
+id, enum and date it produces is re-checked server-side against the project the
+chat is scoped to, so a hallucinated service can't reach an approver.
+
+Set `GEMINI_API_KEY` to enable it. Leave it blank and the feature disappears
+entirely: the entry point is hidden and `/api/v1/chat/*` returns 503. Model
+defaults to `gemini-2.5-flash` (`GEMINI_MODEL`).
+
+Conversations are scoped to one project and readable only by the developer who
+had them. A request raised from a chat records its `conversation_id`, so an
+approver can read the original ask.
+
 ## Secrets
 
 Projects hold credentials, optionally pinned to one environment (so `API_URL`
