@@ -50,6 +50,10 @@ export interface AdminMember {
   username: string
   email: string
   role: string
+  /** What they are on THIS project: 'developer' | 'devops'. Distinct from
+   *  `role` above, which is their global role. Project-devops is what routes
+   *  this project's approvals to them. */
+  project_role: string
   /** Whether this member may reveal the project's secret values. */
   can_view_secrets: boolean
   added_by: string | null
