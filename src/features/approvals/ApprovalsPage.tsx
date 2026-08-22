@@ -45,20 +45,33 @@ function fmt(iso: string | null): string {
   return d.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+/** Drops the repeated date when a window starts and ends on the same day.
+ *  Width matters here: every column this table carries pushes Approve and
+ *  Decline further off the right edge. */
+function fmtWindow(start: string | null, end: string | null): string {
+  if (!start || !end) return '—'
+  const a = new Date(start)
+  const b = new Date(end)
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return '—'
+  const right = a.toDateString() === b.toDateString()
+    ? b.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : fmt(end)
+  return `${fmt(start)} → ${right}`
 }
 
 function fmtCost(v: number | null): string {
   return v == null ? '—' : `$${v.toFixed(2)}`
 }
 
-function fmtDuration(v: number | null): string {
-  return v == null ? '—' : `${v}h`
-}
-
-function truncate(s: string | null, n = 150): string {
+/** 150 was far more than the column could ever show, and it pushed the
+ *  Approve/Decline buttons off the right edge. The full text is in the title
+ *  attribute and on the detail page. */
+function truncate(s: string | null, n = 60): string {
   if (!s) return '—'
   return s.length > n ? `${s.slice(0, n)}…` : s
 }
@@ -152,9 +165,10 @@ export function ApprovalsPage() {
                 'Action',
                 'Reason',
                 'Window',
-                'Duration',
                 'Cost',
-                'Status',
+                // Every row on a single-status tab says the same thing; only
+                // the mixed view needs the column.
+                ...(status === 'all' ? ['Status'] : []),
                 '',
               ]}
             />
@@ -180,17 +194,18 @@ export function ApprovalsPage() {
                   </TCell>
                   <TCell className="text-text-secondary">{r.requester}</TCell>
                   <TCell className="capitalize">{r.action_type.replace(/_/g, ' ')}</TCell>
-                  <TCell className="max-w-xs text-text-secondary">
+                  <TCell className="max-w-[16rem] text-text-secondary">
                     <span title={r.reason ?? ''}>{truncate(r.reason)}</span>
                   </TCell>
                   <TCell className="text-text-secondary whitespace-nowrap">
-                    {fmt(r.start_time)} → {fmt(r.end_time)}
+                    {fmtWindow(r.start_time, r.end_time)}
                   </TCell>
-                  <TCell className="text-text-secondary">{fmtDuration(r.duration_hours)}</TCell>
                   <TCell className="text-text-secondary">{fmtCost(r.estimated_cost)}</TCell>
-                  <TCell>
-                    <StatusBadge status={r.status} />
-                  </TCell>
+                  {status === 'all' && (
+                    <TCell>
+                      <StatusBadge status={r.status} />
+                    </TCell>
+                  )}
                   <TCell>
                     {(r.status === 'pending' ||
                       (r.request_type === 'repo' && r.status === 'failed')) && (

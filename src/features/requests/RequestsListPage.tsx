@@ -24,10 +24,6 @@ interface RequestsPage {
   total: number
 }
 
-function fmtDT(v: string | null): string {
-  return v ? new Date(v).toLocaleString() : '—'
-}
-
 function fmtCost(v: number | null): string {
   return v == null ? '—' : `$${v.toFixed(2)}`
 }
@@ -36,8 +32,38 @@ function fmtDuration(v: number | null): string {
   return v == null ? '—' : `${v}h`
 }
 
+/** Lifecycle groups rather than one tab per state.
+ *
+ *  The old tabs were `statuses` mapped 1:1, which put eleven of them across the
+ *  header — including Starting and Stopping, which last seconds, and Extension
+ *  Pending, which nothing ever set. These are the questions people actually ask
+ *  of the list. */
 function titleCase(s: string): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+const TABS = [
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Open' },
+  { value: 'approved', label: 'Scheduled' },
+  { value: 'starting,active,stopping', label: 'Running' },
+  { value: 'completed,failed,cancelled,declined', label: 'Finished' },
+]
+
+/** "22 Aug, 6:14 PM → 9:14 PM", collapsing the end date when it's the same day. */
+function fmtWindow(start: string | null, end: string | null): string {
+  if (!start || !end) return '—'
+  const a = new Date(start)
+  const b = new Date(end)
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return '—'
+  const day: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+  const time: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' }
+  const sameDay = a.toDateString() === b.toDateString()
+  const left = `${a.toLocaleDateString(undefined, day)}, ${a.toLocaleTimeString(undefined, time)}`
+  const right = sameDay
+    ? b.toLocaleTimeString(undefined, time)
+    : `${b.toLocaleDateString(undefined, day)}, ${b.toLocaleTimeString(undefined, time)}`
+  return `${left} → ${right}`
 }
 
 export function RequestsListPage() {
@@ -54,10 +80,7 @@ export function RequestsListPage() {
       api.get<RequestsPage>(`/requests?page=${page}${status ? `&status=${status}` : ''}`),
   })
 
-  const tabs: TabItem[] = [
-    { value: 'all', label: 'All' },
-    ...(data?.statuses ?? []).map((s) => ({ value: s, label: titleCase(s) })),
-  ]
+  const tabs: TabItem[] = TABS
 
   function changeStatus(v: string) {
     setStatus(v === 'all' ? '' : v)
@@ -72,9 +95,7 @@ export function RequestsListPage() {
     'Action',
     'Status',
     'Duration',
-    'Start',
-    'End',
-    'Created',
+    'Window',
     'Est. cost',
   ]
 
@@ -134,9 +155,9 @@ export function RequestsListPage() {
                     <StatusBadge status={r.status} />
                   </TCell>
                   <TCell className="text-text-secondary">{fmtDuration(r.duration_hours)}</TCell>
-                  <TCell className="text-text-secondary">{fmtDT(r.start_time)}</TCell>
-                  <TCell className="text-text-secondary">{fmtDT(r.end_time)}</TCell>
-                  <TCell className="text-text-secondary">{fmtDT(r.created_at)}</TCell>
+                  <TCell className="text-text-secondary whitespace-nowrap">
+                    {fmtWindow(r.start_time, r.end_time)}
+                  </TCell>
                   <TCell>{fmtCost(r.estimated_cost)}</TCell>
                 </tr>
               ))}
