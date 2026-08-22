@@ -27,6 +27,11 @@ const STATUS_TONE: Record<string, Tone> = {
   expired: 'neutral',
   executed: 'success',
   executing: 'info',
+  // Ticket lifecycle.
+  open: 'warning',
+  in_progress: 'info',
+  resolved: 'success',
+  closed: 'neutral',
 }
 
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: React.ReactNode }) {

@@ -9,6 +9,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  LifeBuoy,
   Menu,
   MessageSquare,
   Moon,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import type { ChatStatus } from '../../features/chat/types'
+import type { TicketStatus } from '../../features/tickets/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useTheme } from '../../lib/theme'
 import { useSidebar } from '../../lib/sidebar'
@@ -35,6 +37,8 @@ interface NavItem {
   show?: Gate
   /** Hidden unless the backend reports the chat assistant is configured. */
   chatOnly?: boolean
+  /** Hidden unless the ticket queue is available (intake on, or tickets exist). */
+  ticketsOnly?: boolean
 }
 
 interface NavGroup {
@@ -51,6 +55,8 @@ const NAV: NavGroup[] = [
       { to: '/chat', label: 'Assistant', icon: MessageSquare, chatOnly: true },
       { to: '/secrets', label: 'Secrets', icon: KeyRound },
       { to: '/approvals', label: 'Approvals', icon: CheckCircle2, show: (u) => u.is_devops },
+      { to: '/tickets', label: 'Tickets', icon: LifeBuoy, show: (u) => u.is_devops,
+        ticketsOnly: true },
       { to: '/activity', label: 'Activity', icon: Activity, show: (u) => u.is_devops },
     ],
   },
@@ -88,6 +94,13 @@ export function AppLayout() {
   const { data: chat } = useQuery({
     queryKey: ['chat', 'status'],
     queryFn: () => api.get<ChatStatus>('/chat/status'),
+  })
+
+  // Stays visible once any ticket exists, so a queue with history does not
+  // vanish because a client secret was rotated.
+  const { data: tickets } = useQuery({
+    queryKey: ['tickets', 'status'],
+    queryFn: () => api.get<TicketStatus>('/tickets/status'),
   })
 
   if (!user) return null
@@ -142,7 +155,10 @@ export function AppLayout() {
         <nav className={cn('flex-1 overflow-y-auto py-3', collapsed ? 'px-2' : 'px-3', 'space-y-5')}>
           {NAV.map((group) => {
             const items = group.items.filter(
-              (i) => (!i.show || i.show(user)) && (!i.chatOnly || chat?.enabled),
+              (i) =>
+                (!i.show || i.show(user)) &&
+                (!i.chatOnly || chat?.enabled) &&
+                (!i.ticketsOnly || tickets?.enabled),
             )
             if (!items.length) return null
             return (
