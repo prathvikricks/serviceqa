@@ -43,8 +43,15 @@ EnvironmentRequest  a window: one-off, or weekly on chosen weekdays
 ```
 
 Roles: **developer** raises requests on projects they're a member of ·
-**devops** approves and can emergency-stop · **admin** manages projects, users
-and secrets.
+**devops** operates environments and can emergency-stop · **admin** manages
+projects, users and secrets.
+
+Approval is **project-scoped**: a request is approved by the members whose
+`project_role` on that project is `devops`, or by any admin. Holding the global
+`devops` role grants operational reach but not approval rights — an admin adds
+you to a project as DevOps. Upgrading an existing deployment backfills every
+global-devops user as project-devops on every active project, so no inbox
+empties on deploy.
 
 ## Mock vs real
 
