@@ -206,6 +206,16 @@ export function ProjectDetailPage() {
     onError: (err: Error) => notify(err.message, 'danger'),
   })
 
+  const setMemberRole = useMutation({
+    mutationFn: ({ mid, project_role }: { mid: number; project_role: string }) =>
+      api.put(`/admin/projects/${id}/members/${mid}`, { project_role }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'projects', id] })
+      notify('Member role updated.', 'success')
+    },
+    onError: (err: Error) => notify(err.message, 'danger'),
+  })
+
   const removeMember = useMutation({
     mutationFn: (mid: number) => api.delete(`/admin/projects/${id}/members/${mid}`),
     onSuccess: () => {
@@ -341,7 +351,9 @@ export function ProjectDetailPage() {
           </CardBody>
         ) : (
           <Table>
-            <THead columns={['Username', 'Email', 'Role', 'Secrets', 'Added by', '']} />
+            <THead
+              columns={['Username', 'Email', 'Role', 'On this project', 'Secrets', 'Added by', '']}
+            />
             <tbody>
               {project.members.map((m) => (
                 <TRow key={m.id}>
@@ -349,6 +361,20 @@ export function ProjectDetailPage() {
                   <TCell className="text-text-secondary">{m.email}</TCell>
                   <TCell>
                     <Badge tone="neutral">{m.role}</Badge>
+                  </TCell>
+                  <TCell>
+                    {/* Approval routing: only a project-devops (or an admin)
+                        sees this project's requests in their inbox. */}
+                    <Select
+                      value={m.project_role}
+                      disabled={setMemberRole.isPending}
+                      onChange={(e) =>
+                        setMemberRole.mutate({ mid: m.id, project_role: e.target.value })
+                      }
+                    >
+                      <option value="developer">Developer</option>
+                      <option value="devops">DevOps (approves)</option>
+                    </Select>
                   </TCell>
                   <TCell>
                     {/* DevOps and admins can always read secrets, so the flag
