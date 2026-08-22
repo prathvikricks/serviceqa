@@ -1,0 +1,10 @@
+# Node
+node_modules/
+dist/
+
+# Local overrides. Note .env itself IS tracked here — it holds only the public
+# VITE_API_URL, which the Docker build needs baked into the bundle.
+.env.local
+
+# OS
+.DS_Store
