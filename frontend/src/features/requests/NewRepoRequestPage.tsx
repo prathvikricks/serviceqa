@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../../lib/api'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { Field, Input, Select } from '../../components/ui/Input'
@@ -18,10 +18,18 @@ export function NewRepoRequestPage() {
   const queryClient = useQueryClient()
   const { notify } = useToast()
 
-  const [repoName, setRepoName] = useState('')
-  const [description, setDescription] = useState('')
-  const [visibility, setVisibility] = useState<Visibility>('private')
-  const [projectId, setProjectId] = useState('')
+  // Set when we arrived from the chat assistant with a validated draft.
+  const { state } = useLocation() as {
+    state?: { prefill?: Record<string, unknown>; conversationId?: number }
+  }
+  const prefill = state?.prefill
+  const str = (v: unknown) => (v === null || v === undefined ? '' : String(v))
+
+  const [repoName, setRepoName] = useState(str(prefill?.repo_name))
+  const [description, setDescription] = useState(str(prefill?.repo_description))
+  const [visibility, setVisibility] = useState<Visibility>(
+    (prefill?.repo_visibility as Visibility) ?? 'private')
+  const [projectId, setProjectId] = useState(str(prefill?.project_id))
 
   const { data: projectsData } = useQuery({
     queryKey: ['projects'],
@@ -36,6 +44,7 @@ export function NewRepoRequestPage() {
         repo_description: description.trim(),
         repo_visibility: visibility,
         project_id: projectId ? Number(projectId) : null,
+        conversation_id: state?.conversationId,
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['requests'] })
