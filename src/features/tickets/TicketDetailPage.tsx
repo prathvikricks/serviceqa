@@ -12,6 +12,11 @@ import { useToast } from '../../components/ui/Toast'
 import type { ProjectsResponse } from '../requests/types'
 import type { TicketDetail, TicketStatus } from './types'
 
+/** Matches the formatting used across the requests and activity pages. */
+function fmt(v: string | null): string {
+  return v ? new Date(v).toLocaleString() : '—'
+}
+
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3 py-1.5 text-sm">
@@ -122,7 +127,7 @@ export function TicketDetailPage() {
                 items={data.comments.map((c) => ({
                   id: String(c.id),
                   title: c.is_system ? c.body : `${c.author ?? 'Someone'}: ${c.body}`,
-                  meta: c.created_at ?? undefined,
+                  meta: c.created_at ? fmt(c.created_at) : undefined,
                   tone: 'default' as const,
                 }))}
               />
@@ -190,8 +195,8 @@ export function TicketDetailPage() {
 
               <div className="border-t border-border-light pt-3">
                 <Detail label="Assignee">{data.assignee ?? 'Unassigned'}</Detail>
-                <Detail label="Raised">{data.created_at ?? '—'}</Detail>
-                {data.resolved_at && <Detail label="Resolved">{data.resolved_at}</Detail>}
+                <Detail label="Raised">{fmt(data.created_at)}</Detail>
+                {data.resolved_at && <Detail label="Resolved">{fmt(data.resolved_at)}</Detail>}
               </div>
 
               <Button variant="secondary" size="sm" onClick={() => navigate('/tickets')}>
