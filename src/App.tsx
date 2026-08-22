@@ -22,6 +22,7 @@ import { ProjectFormPage } from './features/admin/ProjectFormPage'
 import { ProjectDetailPage } from './features/admin/ProjectDetailPage'
 import { CostsPage } from './features/admin/CostsPage'
 import { UsersPage } from './features/admin/UsersPage'
+import { SettingsPage } from './features/admin/SettingsPage'
 import { AuditLogPage } from './features/admin/AuditLogPage'
 import { NotFound } from './components/NotFound'
 
@@ -68,6 +69,7 @@ export default function App() {
                 <Route path="/admin/projects/:id/costs" element={<CostsPage />} />
                 <Route path="/admin/users" element={<UsersPage />} />
                 <Route path="/admin/audit" element={<AuditLogPage />} />
+                <Route path="/admin/settings" element={<SettingsPage />} />
                 <Route path="/admin" element={<Navigate to="/admin/projects" replace />} />
 
                 <Route path="*" element={<NotFound />} />

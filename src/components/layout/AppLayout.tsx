@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
+  Settings as SettingsIcon,
   Sun,
   Users,
   type LucideIcon,
@@ -66,6 +67,7 @@ const NAV: NavGroup[] = [
       { to: '/admin/projects', label: 'Projects', icon: FolderKanban, show: (u) => u.is_admin },
       { to: '/admin/users', label: 'Users', icon: Users, show: (u) => u.is_admin },
       { to: '/admin/audit', label: 'Audit Log', icon: ScrollText, show: (u) => u.is_admin },
+      { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, show: (u) => u.is_admin },
     ],
   },
 ]
