@@ -1,6 +1,9 @@
 import { useNavigate } from 'react-router-dom'
-import { GitBranch, Power } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { GitBranch, MessageSquare, Power } from 'lucide-react'
+import { api } from '../../lib/api'
 import { PageHeader } from '../../components/ui/Page'
+import type { ChatStatus } from '../chat/types'
 
 interface Choice {
   to: string
@@ -24,15 +27,31 @@ const CHOICES: Choice[] = [
   },
 ]
 
+const CHAT_CHOICE: Choice = {
+  to: '/requests/new/chat',
+  icon: <MessageSquare className="h-6 w-6" />,
+  title: 'Not sure what you need?',
+  description: "Describe it in your own words and we'll draft the request for you.",
+}
+
 export function NewRequestChooser() {
   const navigate = useNavigate()
+
+  // Hidden entirely when no GEMINI_API_KEY is configured — a dead card that
+  // 503s is worse than no card.
+  const { data: chat } = useQuery({
+    queryKey: ['chat', 'status'],
+    queryFn: () => api.get<ChatStatus>('/chat/status'),
+  })
+
+  const choices = chat?.enabled ? [...CHOICES, CHAT_CHOICE] : CHOICES
 
   return (
     <div className="space-y-6">
       <PageHeader title="New Request" subtitle="What would you like to request?" />
 
       <div className="grid gap-4 sm:grid-cols-2 max-w-3xl">
-        {CHOICES.map((c) => (
+        {choices.map((c) => (
           <button
             key={c.to}
             type="button"

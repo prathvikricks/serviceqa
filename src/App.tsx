@@ -11,6 +11,7 @@ import { RequestsListPage } from './features/requests/RequestsListPage'
 import { NewRequestChooser } from './features/requests/NewRequestChooser'
 import { NewRequestPage } from './features/requests/NewRequestPage'
 import { NewRepoRequestPage } from './features/requests/NewRepoRequestPage'
+import { ChatPage } from './features/chat/ChatPage'
 import { RequestDetailPage } from './features/requests/RequestDetailPage'
 import { ApprovalsPage } from './features/approvals/ApprovalsPage'
 import { SecretsPage } from './features/secrets/SecretsPage'
@@ -48,6 +49,7 @@ export default function App() {
 
                 <Route path="/requests" element={<RequestsListPage />} />
                 <Route path="/requests/new" element={<NewRequestChooser />} />
+                <Route path="/requests/new/chat" element={<ChatPage />} />
                 <Route path="/requests/new/service" element={<NewRequestPage />} />
                 <Route path="/requests/new/repo" element={<NewRepoRequestPage />} />
                 <Route path="/requests/:id" element={<RequestDetailPage />} />
