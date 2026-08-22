@@ -64,6 +64,30 @@ export function TicketsPage() {
     refetchInterval: 30_000,
   })
 
+  // Setup helpers. Admin-only server-side; the buttons simply 403 otherwise, so
+  // they are shown whenever intake is unconfigured or someone wants a manual poll.
+  const testIntake = useMutation({
+    mutationFn: () => api.post<{ reachable: boolean; mailbox?: string }>(
+      '/tickets/intake/test'),
+    onSuccess: (r) =>
+      notify(`Mailbox reachable: ${r.mailbox ?? 'ok'}`, 'success'),
+    onError: (err) =>
+      notify(err instanceof ApiError ? err.message : 'Could not reach the mailbox',
+             'danger'),
+  })
+
+  const runIntake = useMutation({
+    mutationFn: () => api.post<{ created: number; fetched: number }>(
+      '/tickets/intake/run'),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['tickets'] })
+      notify(`Polled ${r.fetched} message(s); created ${r.created} ticket(s).`,
+             'success')
+    },
+    onError: (err) =>
+      notify(err instanceof ApiError ? err.message : 'Poll failed', 'danger'),
+  })
+
   const create = useMutation({
     mutationFn: () => api.post('/tickets', { title: title.trim(), body: body.trim() }),
     onSuccess: () => {
@@ -85,7 +109,23 @@ export function TicketsPage() {
       <PageHeader
         title="Tickets"
         subtitle="Requests that arrive as email, plus anything raised by hand."
-        action={<Button onClick={() => setNewOpen(true)}>New Ticket</Button>}
+        action={
+          <div className="flex gap-2">
+            {feature?.intake_enabled && (
+              <>
+                <Button variant="ghost" size="sm" disabled={testIntake.isPending}
+                        onClick={() => testIntake.mutate()}>
+                  Test mailbox
+                </Button>
+                <Button variant="secondary" size="sm" disabled={runIntake.isPending}
+                        onClick={() => runIntake.mutate()}>
+                  {runIntake.isPending ? 'Polling…' : 'Poll now'}
+                </Button>
+              </>
+            )}
+            <Button onClick={() => setNewOpen(true)}>New Ticket</Button>
+          </div>
+        }
       />
 
       {/* The failure mode that otherwise presents as "email doesn't work and
