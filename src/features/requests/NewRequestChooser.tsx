@@ -28,7 +28,7 @@ const CHOICES: Choice[] = [
 ]
 
 const CHAT_CHOICE: Choice = {
-  to: '/requests/new/chat',
+  to: '/chat',
   icon: <MessageSquare className="h-6 w-6" />,
   title: 'Not sure what you need?',
   description: "Describe it in your own words and we'll draft the request for you.",

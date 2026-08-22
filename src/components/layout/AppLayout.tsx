@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   Activity,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  MessageSquare,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,6 +19,8 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
+import { api } from '../../lib/api'
+import type { ChatStatus } from '../../features/chat/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useTheme } from '../../lib/theme'
 import { useSidebar } from '../../lib/sidebar'
@@ -29,6 +33,8 @@ interface NavItem {
   label: string
   icon: LucideIcon
   show?: Gate
+  /** Hidden unless the backend reports the chat assistant is configured. */
+  chatOnly?: boolean
 }
 
 interface NavGroup {
@@ -42,6 +48,7 @@ const NAV: NavGroup[] = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/requests', label: 'Requests', icon: Inbox },
+      { to: '/chat', label: 'Assistant', icon: MessageSquare, chatOnly: true },
       { to: '/secrets', label: 'Secrets', icon: KeyRound },
       { to: '/approvals', label: 'Approvals', icon: CheckCircle2, show: (u) => u.is_devops },
       { to: '/activity', label: 'Activity', icon: Activity, show: (u) => u.is_devops },
@@ -75,6 +82,13 @@ export function AppLayout() {
   const { collapsed, toggle: toggleCollapse } = useSidebar()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Server-side feature flag: no GEMINI_API_KEY means no assistant, so the
+  // nav entry disappears rather than leading to a dead page.
+  const { data: chat } = useQuery({
+    queryKey: ['chat', 'status'],
+    queryFn: () => api.get<ChatStatus>('/chat/status'),
+  })
 
   if (!user) return null
 
@@ -127,7 +141,9 @@ export function AppLayout() {
 
         <nav className={cn('flex-1 overflow-y-auto py-3', collapsed ? 'px-2' : 'px-3', 'space-y-5')}>
           {NAV.map((group) => {
-            const items = group.items.filter((i) => !i.show || i.show(user))
+            const items = group.items.filter(
+              (i) => (!i.show || i.show(user)) && (!i.chatOnly || chat?.enabled),
+            )
             if (!items.length) return null
             return (
               <div key={group.title}>

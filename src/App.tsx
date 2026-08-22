@@ -48,8 +48,8 @@ export default function App() {
                 <Route path="/activity" element={<ActivityPage />} />
 
                 <Route path="/requests" element={<RequestsListPage />} />
+                <Route path="/chat" element={<ChatPage />} />
                 <Route path="/requests/new" element={<NewRequestChooser />} />
-                <Route path="/requests/new/chat" element={<ChatPage />} />
                 <Route path="/requests/new/service" element={<NewRequestPage />} />
                 <Route path="/requests/new/repo" element={<NewRepoRequestPage />} />
                 <Route path="/requests/:id" element={<RequestDetailPage />} />
