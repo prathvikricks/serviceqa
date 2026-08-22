@@ -59,3 +59,12 @@ export interface TicketStatus {
   categories: string[]
   urgencies: string[]
 }
+
+export interface Assignee {
+  id: number
+  username: string
+}
+
+export interface AssigneesResponse {
+  assignees: Assignee[]
+}

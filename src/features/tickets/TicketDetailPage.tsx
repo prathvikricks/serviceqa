@@ -10,7 +10,7 @@ import { Field, Input, Select } from '../../components/ui/Input'
 import { Timeline } from '../../components/ui/Timeline'
 import { useToast } from '../../components/ui/Toast'
 import type { ProjectsResponse } from '../requests/types'
-import type { TicketDetail, TicketStatus } from './types'
+import type { AssigneesResponse, TicketDetail, TicketStatus } from './types'
 
 /** Matches the formatting used across the requests and activity pages. */
 function fmt(v: string | null): string {
@@ -43,6 +43,10 @@ export function TicketDetailPage() {
   const { data: feature } = useQuery({
     queryKey: ['tickets', 'status'],
     queryFn: () => api.get<TicketStatus>('/tickets/status'),
+  })
+  const { data: assignees } = useQuery({
+    queryKey: ['tickets', 'assignees'],
+    queryFn: () => api.get<AssigneesResponse>('/tickets/assignees'),
   })
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -152,6 +156,20 @@ export function TicketDetailPage() {
           <CardHeader title="Triage" />
           <CardBody>
             <div className="space-y-4">
+              <Field label="Assignee">
+                <Select
+                  value={data.assignee_id ?? ''}
+                  onChange={(e) => patch.mutate({
+                    assignee_id: e.target.value ? Number(e.target.value) : null,
+                  })}
+                >
+                  <option value="">Unassigned</option>
+                  {assignees?.assignees.map((a) => (
+                    <option key={a.id} value={a.id}>{a.username}</option>
+                  ))}
+                </Select>
+              </Field>
+
               <Field label="Status">
                 <Select value={data.status}
                         onChange={(e) => patch.mutate({ status: e.target.value })}>
@@ -194,7 +212,6 @@ export function TicketDetailPage() {
               </Field>
 
               <div className="border-t border-border-light pt-3">
-                <Detail label="Assignee">{data.assignee ?? 'Unassigned'}</Detail>
                 <Detail label="Raised">{fmt(data.created_at)}</Detail>
                 {data.resolved_at && <Detail label="Resolved">{fmt(data.resolved_at)}</Detail>}
               </div>
