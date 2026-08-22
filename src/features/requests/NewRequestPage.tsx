@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../../lib/api'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { Field, Input, Select } from '../../components/ui/Input'
@@ -26,23 +26,44 @@ const WEEKDAYS: { token: string; label: string }[] = [
   { token: 'sun', label: 'Sun' },
 ]
 
+/** `datetime-local` wants exactly YYYY-MM-DDTHH:MM; drafts carry full ISO. */
+function toLocalInput(value: unknown): string {
+  return typeof value === 'string' ? value.slice(0, 16) : ''
+}
+
+function str(value: unknown, fallback = ''): string {
+  return value === null || value === undefined ? fallback : String(value)
+}
+
 export function NewRequestPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { notify } = useToast()
 
-  const [projectId, setProjectId] = useState('')
-  const [environmentId, setEnvironmentId] = useState('')
-  const [actionType, setActionType] = useState<ActionType>('start_stop')
-  const [scheduleType, setScheduleType] = useState<ScheduleType>('once')
-  const [startTime, setStartTime] = useState('')
-  const [endTime, setEndTime] = useState('')
+  // Set when we arrived from the chat assistant with a validated draft. The
+  // developer still reviews and submits — this only saves the typing.
+  const { state } = useLocation() as {
+    state?: { prefill?: Record<string, unknown>; conversationId?: number }
+  }
+  const prefill = state?.prefill
+
+  const [projectId, setProjectId] = useState(str(prefill?.project_id))
+  const [environmentId, setEnvironmentId] = useState(str(prefill?.environment_id))
+  const [actionType, setActionType] = useState<ActionType>(
+    (prefill?.action_type as ActionType) ?? 'start_stop')
+  const [scheduleType, setScheduleType] = useState<ScheduleType>(
+    (prefill?.schedule_type as ScheduleType) ?? 'once')
+  const [startTime, setStartTime] = useState(toLocalInput(prefill?.start_time))
+  const [endTime, setEndTime] = useState(toLocalInput(prefill?.end_time))
   // Weekly recurrence
-  const [days, setDays] = useState<string[]>([])
-  const [startHm, setStartHm] = useState('09:00')
-  const [stopHm, setStopHm] = useState('17:00')
-  const [recurUntil, setRecurUntil] = useState('')
-  const [reason, setReason] = useState('')
+  const [days, setDays] = useState<string[]>(
+    typeof prefill?.recurrence_days === 'string' && prefill.recurrence_days
+      ? prefill.recurrence_days.split(',')
+      : [])
+  const [startHm, setStartHm] = useState(str(prefill?.start_hm, '09:00'))
+  const [stopHm, setStopHm] = useState(str(prefill?.stop_hm, '17:00'))
+  const [recurUntil, setRecurUntil] = useState(str(prefill?.recur_until))
+  const [reason, setReason] = useState(str(prefill?.reason))
 
   function toggleDay(token: string) {
     setDays((prev) =>
@@ -106,6 +127,7 @@ export function NewRequestPage() {
               stop_hm: stopHm,
               recur_until: recurUntil || null,
               reason,
+              conversation_id: state?.conversationId,
             }
           : {
               environment_id: Number(environmentId),
@@ -114,6 +136,7 @@ export function NewRequestPage() {
               start_time: new Date(startTime).toISOString(),
               end_time: new Date(endTime).toISOString(),
               reason,
+              conversation_id: state?.conversationId,
             },
       ),
     onSuccess: (created) => {
