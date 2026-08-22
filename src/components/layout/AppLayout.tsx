@@ -24,6 +24,7 @@ import {
 import { api } from '../../lib/api'
 import type { ChatStatus } from '../../features/chat/types'
 import type { TicketStatus } from '../../features/tickets/types'
+import { Brand } from '../Brand'
 import { useAuth } from '../../auth/AuthContext'
 import { useTheme } from '../../lib/theme'
 import { useSidebar } from '../../lib/sidebar'
@@ -132,7 +133,7 @@ export function AppLayout() {
         >
           {!collapsed && (
             <div className="flex items-center px-2">
-              <span className="text-sm font-semibold tracking-tight">envmanager</span>
+              <Brand className="h-5" />
             </div>
           )}
           {collapsed ? (
@@ -205,6 +206,12 @@ export function AppLayout() {
         </nav>
 
         {/* User block */}
+        {!collapsed && (
+          <p className="px-5 pb-2 text-[0.7rem] tracking-wide text-text-muted">
+            Powered by DevOps Team
+          </p>
+        )}
+
         <div className="border-t border-border-light p-3">
           <div
             className={cn(
