@@ -235,6 +235,22 @@ async function stream(path: string, body: unknown, handlers: StreamHandlers): Pr
   }
 }
 
+/** Download a GET endpoint as a file. The `api.*` helpers parse JSON, so a CSV
+ * export needs its own path — fetched as a credentialed blob (not a bare
+ * `<a href>`) so the session cookie is sent even when the API is cross-origin. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include' })
+  if (!res.ok) throw new ApiError(res.status, `Download failed (${res.status})`)
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export const api = {
   get: <T>(path: string, opts?: Options) => request<T>(path, { ...opts, method: 'GET' }),
   stream,

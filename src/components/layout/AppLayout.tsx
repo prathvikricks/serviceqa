@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
   ScrollText,
   Settings as SettingsIcon,
+  ShieldAlert,
   Sun,
   Users,
   type LucideIcon,
@@ -24,6 +25,7 @@ import {
 import { api } from '../../lib/api'
 import type { ChatStatus } from '../../features/chat/types'
 import type { TicketStatus } from '../../features/tickets/types'
+import type { VulnStatus } from '../../features/vulnerabilities/types'
 import { Brand } from '../Brand'
 import { useAuth } from '../../auth/AuthContext'
 import { useTheme } from '../../lib/theme'
@@ -41,6 +43,8 @@ interface NavItem {
   chatOnly?: boolean
   /** Hidden unless the ticket queue is available (intake on, or tickets exist). */
   ticketsOnly?: boolean
+  /** Hidden unless the vuln list is available (scanning on, or findings exist). */
+  vulnOnly?: boolean
 }
 
 interface NavGroup {
@@ -59,6 +63,8 @@ const NAV: NavGroup[] = [
       { to: '/approvals', label: 'Approvals', icon: CheckCircle2, show: (u) => u.is_devops },
       { to: '/tickets', label: 'Tickets', icon: LifeBuoy, show: (u) => u.is_devops,
         ticketsOnly: true },
+      { to: '/vulnerabilities', label: 'Vulnerabilities', icon: ShieldAlert,
+        show: (u) => u.is_devops, vulnOnly: true },
       { to: '/activity', label: 'Activity', icon: Activity, show: (u) => u.is_devops },
     ],
   },
@@ -104,6 +110,12 @@ export function AppLayout() {
   const { data: tickets } = useQuery({
     queryKey: ['tickets', 'status'],
     queryFn: () => api.get<TicketStatus>('/tickets/status'),
+  })
+
+  // Same idea for the vuln list: visible once scanning is on or findings exist.
+  const { data: vulns } = useQuery({
+    queryKey: ['vulnerabilities', 'status'],
+    queryFn: () => api.get<VulnStatus>('/vulnerabilities/status'),
   })
 
   if (!user) return null
@@ -161,7 +173,8 @@ export function AppLayout() {
               (i) =>
                 (!i.show || i.show(user)) &&
                 (!i.chatOnly || chat?.enabled) &&
-                (!i.ticketsOnly || tickets?.enabled),
+                (!i.ticketsOnly || tickets?.enabled) &&
+                (!i.vulnOnly || vulns?.enabled),
             )
             if (!items.length) return null
             return (

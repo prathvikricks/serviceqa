@@ -14,6 +14,7 @@ import { NewRepoRequestPage } from './features/requests/NewRepoRequestPage'
 import { ChatPage } from './features/chat/ChatPage'
 import { TicketsPage } from './features/tickets/TicketsPage'
 import { TicketDetailPage } from './features/tickets/TicketDetailPage'
+import { VulnerabilitiesPage } from './features/vulnerabilities/VulnerabilitiesPage'
 import { RequestDetailPage } from './features/requests/RequestDetailPage'
 import { ApprovalsPage } from './features/approvals/ApprovalsPage'
 import { SecretsPage } from './features/secrets/SecretsPage'
@@ -62,6 +63,7 @@ export default function App() {
                 <Route path="/approvals" element={<ApprovalsPage />} />
                 <Route path="/tickets" element={<TicketsPage />} />
                 <Route path="/tickets/:id" element={<TicketDetailPage />} />
+                <Route path="/vulnerabilities" element={<VulnerabilitiesPage />} />
                 <Route path="/secrets" element={<SecretsPage />} />
 
                 <Route path="/admin/projects" element={<ProjectsPage />} />
