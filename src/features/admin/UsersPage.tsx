@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Card, CardBody } from '../../components/ui/Card'
 import { Field, Input, Select } from '../../components/ui/Input'
-import { Modal } from '../../components/ui/Modal'
+import { Modal, ConfirmDialog } from '../../components/ui/Modal'
 import { Table, THead, TRow, TCell } from '../../components/ui/Table'
 import { EmptyState, ErrorState, PageHeader, Spinner } from '../../components/ui/Page'
 import { useToast } from '../../components/ui/Toast'
@@ -81,6 +81,17 @@ export function UsersPage() {
     onError: (err) => notify(err instanceof ApiError ? err.message : 'Update failed.', 'danger'),
   })
 
+  const [resetTarget, setResetTarget] = useState<User | null>(null)
+  const resetMfa = useMutation({
+    mutationFn: (user: User) => api.post<User>(`/admin/users/${user.id}/reset-mfa`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+      notify('MFA reset. The user will re-enroll on their next login.', 'success')
+      setResetTarget(null)
+    },
+    onError: (err) => notify(err instanceof ApiError ? err.message : 'Reset failed.', 'danger'),
+  })
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -103,7 +114,7 @@ export function UsersPage() {
             <EmptyState message="No users yet." />
           ) : (
             <Table>
-              <THead columns={['User', 'Email', 'Role', 'Status', '']} />
+              <THead columns={['User', 'Email', 'Role', 'MFA', 'Status', '']} />
               <tbody>
                 {users.map((user) => (
                   <TRow key={user.id}>
@@ -115,6 +126,11 @@ export function UsersPage() {
                       </Badge>
                     </TCell>
                     <TCell>
+                      <Badge tone={user.mfa_enabled ? 'success' : 'neutral'}>
+                        {user.mfa_enabled ? 'Enrolled' : 'Not set up'}
+                      </Badge>
+                    </TCell>
+                    <TCell>
                       <Badge tone={user.is_active ? 'success' : 'neutral'}>
                         {user.is_active ? 'Active' : 'Disabled'}
                       </Badge>
@@ -123,6 +139,14 @@ export function UsersPage() {
                       <div className="flex justify-end gap-2">
                         <Button size="sm" variant="secondary" onClick={() => openEdit(user)}>
                           Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!user.mfa_enabled || resetMfa.isPending}
+                          onClick={() => setResetTarget(user)}
+                        >
+                          Reset MFA
                         </Button>
                         <Button
                           size="sm"
@@ -199,6 +223,21 @@ export function UsersPage() {
           </Field>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={resetTarget !== null}
+        title="Reset MFA"
+        message={
+          resetTarget
+            ? `Reset MFA for ${resetTarget.username}? They'll be prompted to enroll a new authenticator on their next login.`
+            : ''
+        }
+        confirmLabel="Reset MFA"
+        danger
+        pending={resetMfa.isPending}
+        onCancel={() => setResetTarget(null)}
+        onConfirm={() => resetTarget && resetMfa.mutate(resetTarget)}
+      />
     </div>
   )
 }

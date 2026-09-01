@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
@@ -15,146 +14,171 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts'
-import {
-  Inbox,
-  PlayCircle,
-  Clock,
-  DollarSign,
-  FolderKanban,
-  Boxes,
-} from 'lucide-react'
+import { Inbox, PlayCircle, Clock, DollarSign, FolderKanban, Boxes } from 'lucide-react'
 import { api } from '../../lib/api'
-import type { DashboardData, RequestSummary } from '../../lib/types'
+import type { DashboardData } from '../../lib/types'
+import { useAuth } from '../../auth/AuthContext'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
-import { StatusBadge } from '../../components/ui/Badge'
 import { PageHeader, Spinner } from '../../components/ui/Page'
+import {
+  type Analytics,
+  Kpi,
+  ChartCard,
+  MiniTable,
+  statusColor,
+  axisProps,
+  tooltipStyle,
+} from './parts'
 
-interface Analytics {
-  kpis: {
-    total_requests: number
-    active: number
-    pending: number
-    completed_30d: number
-    est_cost_30d: number
-    projects: number
-    environments: number
-  }
-  requests_over_time: { day: string; count: number }[]
-  by_status: { status: string; count: number }[]
-  by_action: { action_type: string; count: number }[]
-  cost_by_month: { month: string; cost: number }[]
-  top_environments: { name: string; count: number }[]
+interface ProjectBrief {
+  id: number
+  name: string
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  active: 'var(--success-fg)',
-  starting: 'var(--success-fg)',
-  completed: 'var(--info-fg)',
-  approved: 'var(--info-fg)',
-  pending: 'var(--warning-fg)',
-  declined: 'var(--danger-fg)',
-  failed: 'var(--danger-fg)',
-  cancelled: 'var(--neutral-fg)',
-}
-const statusColor = (s: string) => STATUS_COLOR[s] ?? 'var(--neutral-fg)'
-
-const axisProps = {
-  tick: { fill: 'var(--text-muted)', fontSize: 11 },
-  stroke: 'var(--border)',
-  tickLine: false,
-}
-const tooltipStyle = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 10,
-  color: 'var(--text-primary)',
-  fontSize: 12,
-}
-
-function Kpi({ icon, label, value }: { icon: ReactNode; label: string; value: string | number }) {
+/** Requests-over-30-days area chart — shared by both views. */
+function RequestsOverTime({ data }: { data: Analytics['requests_over_time'] }) {
   return (
-    <Card>
-      <CardBody className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-accent-soft text-accent">
-          {icon}
-        </span>
-        <div>
-          <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-text-muted">
-            {label}
-          </p>
-          <p className="text-2xl font-semibold tracking-tight">{value}</p>
-        </div>
-      </CardBody>
-    </Card>
+    <ChartCard title="Requests · last 30 days" empty={data.every((p) => p.count === 0)}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+          <defs>
+            <linearGradient id="reqFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
+          <XAxis dataKey="day" {...axisProps} interval={4} />
+          <YAxis allowDecimals={false} {...axisProps} />
+          <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: 'var(--border)' }} />
+          <Area type="monotone" dataKey="count" stroke="var(--accent)" strokeWidth={2} fill="url(#reqFill)" />
+        </AreaChart>
+      </ResponsiveContainer>
+    </ChartCard>
   )
 }
 
-function ChartCard({
-  title,
-  children,
-  empty,
-}: {
-  title: string
-  children: ReactNode
-  empty: boolean
-}) {
+/** Requests-by-status donut — shared by both views. */
+function StatusDonut({ data }: { data: Analytics['by_status'] }) {
   return (
-    <Card>
-      <CardHeader title={title} />
-      <CardBody>
-        {empty ? (
-          <p className="flex h-[220px] items-center justify-center text-sm text-text-muted">
-            No data yet.
-          </p>
-        ) : (
-          <div className="h-[220px]">{children}</div>
-        )}
-      </CardBody>
-    </Card>
+    <ChartCard title="Requests by status" empty={data.length === 0}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="count"
+            nameKey="status"
+            innerRadius={52}
+            outerRadius={82}
+            paddingAngle={2}
+            stroke="var(--surface)"
+          >
+            {data.map((s) => (
+              <Cell key={s.status} fill={statusColor(s.status)} />
+            ))}
+          </Pie>
+          <Tooltip contentStyle={tooltipStyle} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="-mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
+        {data.map((s) => (
+          <span key={s.status} className="flex items-center gap-1.5 text-xs text-text-secondary">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(s.status) }} />
+            {s.status} ({s.count})
+          </span>
+        ))}
+      </div>
+    </ChartCard>
   )
 }
 
-function MiniTable({ title, rows, action }: { title: string; rows: RequestSummary[]; action?: ReactNode }) {
+const newRequestLink = (
+  <Link to="/requests/new" className="text-sm font-medium text-accent hover:underline">
+    New request
+  </Link>
+)
+
+// --------------------------------------------------------------------------
+// Developer dashboard — everything scoped to the signed-in developer.
+// --------------------------------------------------------------------------
+
+function DeveloperDashboard({ a, d }: { a: Analytics; d?: DashboardData }) {
+  const projects = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.get<{ projects: ProjectBrief[] }>('/projects'),
+  })
+  const k = a.kpis
+
   return (
-    <Card>
-      <CardHeader title={title} action={action} />
-      {rows.length === 0 ? (
-        <CardBody className="text-sm text-text-muted">Nothing here yet.</CardBody>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <tbody>
-              {rows.slice(0, 6).map((r) => (
-                <tr key={r.id} className="border-t border-border-light hover:bg-hover">
-                  <td className="px-5 py-2.5 font-medium">#{r.id}</td>
-                  <td className="px-5 py-2.5 text-text-secondary">{r.project}</td>
-                  <td className="px-5 py-2.5 text-text-secondary">{r.environment}</td>
-                  <td className="px-5 py-2.5">
-                    <StatusBadge status={r.status} />
-                  </td>
-                </tr>
+    <div className="space-y-6">
+      <PageHeader title="Your dashboard" subtitle="Your requests and projects at a glance." />
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Kpi icon={<Inbox size={18} />} label="My requests" value={k.total_requests} />
+        <Kpi icon={<PlayCircle size={18} />} label="Active" value={k.active} />
+        <Kpi icon={<Clock size={18} />} label="Pending" value={k.pending} />
+        <Kpi icon={<FolderKanban size={18} />} label="My projects" value={k.projects} />
+      </div>
+
+      <RequestsOverTime data={a.requests_over_time} />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <StatusDonut data={a.by_status} />
+        <Card>
+          <CardHeader
+            title="My projects"
+            action={
+              <Link to="/secrets" className="text-sm font-medium text-accent hover:underline">
+                Secrets
+              </Link>
+            }
+          />
+          {(projects.data?.projects ?? []).length === 0 ? (
+            <CardBody className="text-sm text-text-muted">
+              You're not a member of any project yet.
+            </CardBody>
+          ) : (
+            <CardBody className="flex flex-wrap gap-2">
+              {(projects.data?.projects ?? []).map((p) => (
+                <span
+                  key={p.id}
+                  className="rounded-[var(--radius-sm)] border border-border px-3 py-1.5 text-sm text-text-secondary"
+                >
+                  {p.name}
+                </span>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
+            </CardBody>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <MiniTable
+          title="My active requests"
+          rows={d?.active_requests ?? []}
+          emptyLabel="No active requests."
+        />
+        <MiniTable
+          title="My recent requests"
+          rows={d?.recent_requests ?? []}
+          action={newRequestLink}
+          emptyLabel="You haven't raised any requests yet."
+        />
+      </div>
+    </div>
   )
 }
 
-export function DashboardPage() {
-  const a = useQuery({ queryKey: ['analytics'], queryFn: () => api.get<Analytics>('/dashboard/analytics') })
-  const d = useQuery({ queryKey: ['dashboard'], queryFn: () => api.get<DashboardData>('/dashboard') })
+// --------------------------------------------------------------------------
+// Ops dashboard — the org-wide view for devops/admin (unchanged).
+// --------------------------------------------------------------------------
 
-  if (a.isLoading || d.isLoading) return <Spinner label="Loading dashboard…" />
-  if (a.error || !a.data) return <p className="text-danger-fg">Failed to load analytics.</p>
-  const k = a.data.kpis
-
+function OpsDashboard({ a, d }: { a: Analytics; d?: DashboardData }) {
+  const k = a.kpis
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Activity, cost, and environment analytics at a glance." />
 
-      {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-6">
         <Kpi icon={<Inbox size={18} />} label="Requests" value={k.total_requests} />
         <Kpi icon={<PlayCircle size={18} />} label="Active" value={k.active} />
@@ -164,59 +188,13 @@ export function DashboardPage() {
         <Kpi icon={<Boxes size={18} />} label="Environments" value={k.environments} />
       </div>
 
-      {/* Requests over time */}
-      <ChartCard title="Requests · last 30 days" empty={a.data.requests_over_time.every((p) => p.count === 0)}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={a.data.requests_over_time} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
-            <defs>
-              <linearGradient id="reqFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.35} />
-                <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
-            <XAxis dataKey="day" {...axisProps} interval={4} />
-            <YAxis allowDecimals={false} {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: 'var(--border)' }} />
-            <Area type="monotone" dataKey="count" stroke="var(--accent)" strokeWidth={2} fill="url(#reqFill)" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </ChartCard>
+      <RequestsOverTime data={a.requests_over_time} />
 
-      {/* Status donut + cost bar */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard title="Requests by status" empty={a.data.by_status.length === 0}>
+        <StatusDonut data={a.by_status} />
+        <ChartCard title="Cost by month" empty={a.cost_by_month.every((m) => m.cost === 0)}>
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={a.data.by_status}
-                dataKey="count"
-                nameKey="status"
-                innerRadius={52}
-                outerRadius={82}
-                paddingAngle={2}
-                stroke="var(--surface)"
-              >
-                {a.data.by_status.map((s) => (
-                  <Cell key={s.status} fill={statusColor(s.status)} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="-mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
-            {a.data.by_status.map((s) => (
-              <span key={s.status} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(s.status) }} />
-                {s.status} ({s.count})
-              </span>
-            ))}
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Cost by month" empty={a.data.cost_by_month.every((m) => m.cost === 0)}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={a.data.cost_by_month} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
+            <BarChart data={a.cost_by_month} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
               <XAxis dataKey="month" {...axisProps} />
               <YAxis {...axisProps} />
@@ -227,14 +205,9 @@ export function DashboardPage() {
         </ChartCard>
       </div>
 
-      {/* Top environments */}
-      <ChartCard title="Top environments by activity" empty={a.data.top_environments.length === 0}>
+      <ChartCard title="Top environments by activity" empty={a.top_environments.length === 0}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            layout="vertical"
-            data={a.data.top_environments}
-            margin={{ top: 4, right: 12, left: 8, bottom: 0 }}
-          >
+          <BarChart layout="vertical" data={a.top_environments} margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" horizontal={false} />
             <XAxis type="number" allowDecimals={false} {...axisProps} />
             <YAxis type="category" dataKey="name" width={110} {...axisProps} />
@@ -244,19 +217,32 @@ export function DashboardPage() {
         </ResponsiveContainer>
       </ChartCard>
 
-      {/* Slim lists */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <MiniTable
           title="Pending approvals"
-          rows={d.data?.pending_approvals ?? []}
+          rows={d?.pending_approvals ?? []}
           action={
             <Link to="/approvals" className="text-sm font-medium text-accent hover:underline">
               Review all
             </Link>
           }
         />
-        <MiniTable title="Recent activity" rows={d.data?.recent_requests ?? []} />
+        <MiniTable title="Recent activity" rows={d?.recent_requests ?? []} />
       </div>
     </div>
   )
+}
+
+export function DashboardPage() {
+  const { user } = useAuth()
+  const a = useQuery({ queryKey: ['analytics'], queryFn: () => api.get<Analytics>('/dashboard/analytics') })
+  const d = useQuery({ queryKey: ['dashboard'], queryFn: () => api.get<DashboardData>('/dashboard') })
+
+  if (a.isLoading || d.isLoading) return <Spinner label="Loading dashboard…" />
+  if (a.error || !a.data) return <p className="text-danger-fg">Failed to load analytics.</p>
+
+  // Developers get a view scoped to their own work; devops/admin get org-wide.
+  return user?.is_devops
+    ? <OpsDashboard a={a.data} d={d.data} />
+    : <DeveloperDashboard a={a.data} d={d.data} />
 }
