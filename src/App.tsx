@@ -26,6 +26,8 @@ import { UsersPage } from './features/admin/UsersPage'
 import { SettingsPage } from './features/admin/SettingsPage'
 import { LlmSettingsPage } from './features/admin/LlmSettingsPage'
 import { MailSettingsPage } from './features/admin/MailSettingsPage'
+import { AwsSettingsPage } from './features/admin/AwsSettingsPage'
+import { AwsSecretsPage } from './features/admin/AwsSecretsPage'
 import { AuditLogPage } from './features/admin/AuditLogPage'
 import { NotFound } from './components/NotFound'
 
@@ -71,11 +73,13 @@ export default function App() {
                 <Route path="/admin/projects/:id" element={<ProjectDetailPage />} />
                 <Route path="/admin/projects/:id/edit" element={<ProjectFormPage />} />
                 <Route path="/admin/projects/:id/costs" element={<CostsPage />} />
+                <Route path="/admin/aws-secrets" element={<AwsSecretsPage />} />
                 <Route path="/admin/users" element={<UsersPage />} />
                 <Route path="/admin/audit" element={<AuditLogPage />} />
                 <Route path="/admin/settings" element={<SettingsPage />} />
                 <Route path="/admin/settings/llm" element={<LlmSettingsPage />} />
                 <Route path="/admin/settings/mail" element={<MailSettingsPage />} />
+                <Route path="/admin/settings/aws" element={<AwsSettingsPage />} />
                 <Route path="/admin" element={<Navigate to="/admin/projects" replace />} />
 
                 <Route path="*" element={<NotFound />} />

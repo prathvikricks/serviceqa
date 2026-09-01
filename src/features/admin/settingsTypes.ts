@@ -26,6 +26,14 @@ export interface IntegrationStatus {
     mailbox: string | null
     error: string | null
   }
+  aws: {
+    configured: boolean
+    /** AWS actually answered a list call — distinct from merely being filled in. */
+    reachable: boolean
+    region: string | null
+    secret_count: number | null
+    error: string | null
+  }
 }
 
 export interface GeminiModel {

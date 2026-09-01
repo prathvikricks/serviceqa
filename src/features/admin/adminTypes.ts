@@ -83,6 +83,29 @@ export interface ProjectSecret {
   can_reveal: boolean
 }
 
+/** A secret listed live from AWS on the central manager (GET /admin/aws-secrets). */
+export interface AwsSecretListing {
+  aws_arn: string
+  aws_name: string
+  aws_region: string
+  description: string | null
+  mappings: { assoc_id: number; project_id: number; project_name: string | null; scope: string }[]
+}
+
+/** An AWS secret mapped to a project (GET /projects/<id>/aws-secrets).
+ *  `id` is the mapping id — what reveal and dissociate operate on. */
+export interface ProjectAwsSecret {
+  id: number
+  project_id: number
+  environment_id: number | null
+  scope: string
+  key: string
+  aws_name: string
+  aws_region: string
+  aws: true
+  can_reveal: boolean
+}
+
 export interface AdminService {
   id: number
   environment_id: number

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Mail, Sparkles } from 'lucide-react'
+import { KeyRound, Mail, Sparkles } from 'lucide-react'
 import { api } from '../../lib/api'
 import { PageHeader, Spinner, ErrorState } from '../../components/ui/Page'
 import { Badge } from '../../components/ui/Badge'
@@ -24,15 +24,16 @@ export function SettingsPage() {
   if (isLoading) return <Spinner label="Loading settings…" />
   if (isError || !data) return <ErrorState message="Could not load settings." />
 
-  function badge(group: 'llm' | 'mail') {
+  function badge(group: 'llm' | 'mail' | 'aws') {
     if (statusLoading || !status) return <Badge tone="neutral">Checking…</Badge>
     if (group === 'llm') {
       return status.llm.configured
         ? <Badge tone="success">Connected</Badge>
         : <Badge tone="neutral">Not configured</Badge>
     }
-    if (!status.mail.configured) return <Badge tone="neutral">Not configured</Badge>
-    return status.mail.reachable
+    const s = status[group]
+    if (!s.configured) return <Badge tone="neutral">Not configured</Badge>
+    return s.reachable
       ? <Badge tone="success">Connected</Badge>
       : <Badge tone="danger">Configured, unreachable</Badge>
   }
@@ -40,6 +41,7 @@ export function SettingsPage() {
   const tiles = [
     { group: 'llm' as const, to: '/admin/settings/llm', icon: <Sparkles className="h-6 w-6" /> },
     { group: 'mail' as const, to: '/admin/settings/mail', icon: <Mail className="h-6 w-6" /> },
+    { group: 'aws' as const, to: '/admin/settings/aws', icon: <KeyRound className="h-6 w-6" /> },
   ]
 
   return (

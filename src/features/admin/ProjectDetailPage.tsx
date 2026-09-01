@@ -16,7 +16,9 @@ import type {
   AdminProjectDetail,
   AdminService,
   AdminUser,
+  AwsSecretListing,
   DiscoveredResource,
+  ProjectAwsSecret,
   ProjectSecret,
   ResourceGroup,
 } from './adminTypes'
@@ -179,6 +181,58 @@ export function ProjectDetailPage() {
     onError: (err: Error) => notify(err.message, 'danger'),
   })
 
+  // --- AWS secrets (references to AWS Secrets Manager) -----------------------
+  const awsQuery = useQuery({
+    queryKey: ['aws-secrets', 'project', id],
+    queryFn: () => api.get<{ aws_secrets: ProjectAwsSecret[] }>(`/projects/${id}/aws-secrets`),
+  })
+  const awsSecrets = awsQuery.data?.aws_secrets ?? []
+
+  const [awsModal, setAwsModal] = useState(false)
+  const [awsForm, setAwsForm] = useState({ aws_arn: '', environment_id: '' })
+  const [awsDetach, setAwsDetach] = useState<ProjectAwsSecret | null>(null)
+
+  // The live AWS list to pick from — fetched only when the modal opens.
+  const awsCatalog = useQuery({
+    queryKey: ['admin', 'aws-secrets'],
+    queryFn: () => api.get<{ aws_secrets: AwsSecretListing[] }>('/admin/aws-secrets'),
+    enabled: awsModal,
+    retry: false,
+  })
+
+  const associateAws = useMutation({
+    mutationFn: () => {
+      const chosen = (awsCatalog.data?.aws_secrets ?? []).find(
+        (s) => s.aws_arn === awsForm.aws_arn,
+      )
+      return api.post(`/admin/projects/${id}/aws-secrets`, {
+        aws_arn: awsForm.aws_arn,
+        aws_name: chosen?.aws_name,
+        aws_region: chosen?.aws_region,
+        environment_id: awsForm.environment_id || null,
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['aws-secrets', 'project', id] })
+      qc.invalidateQueries({ queryKey: ['admin', 'aws-secrets'] })
+      notify('AWS secret associated.', 'success')
+      setAwsModal(false)
+      setAwsForm({ aws_arn: '', environment_id: '' })
+    },
+    onError: (err: Error) => notify(err.message, 'danger'),
+  })
+
+  const detachAws = useMutation({
+    mutationFn: (aid: number) => api.delete(`/admin/projects/${id}/aws-secrets/${aid}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['aws-secrets', 'project', id] })
+      qc.invalidateQueries({ queryKey: ['admin', 'aws-secrets'] })
+      notify('AWS secret detached.', 'success')
+      setAwsDetach(null)
+    },
+    onError: (err: Error) => notify(err.message, 'danger'),
+  })
+
   // --- Members --------------------------------------------------------------
   const [memberModal, setMemberModal] = useState(false)
   const [memberUsername, setMemberUsername] = useState('')
@@ -334,6 +388,124 @@ export function ProjectDetailPage() {
           </Table>
         )}
       </Card>
+
+      {/* AWS secrets (references to AWS Secrets Manager) ------------------- */}
+      <Card>
+        <CardHeader
+          title="AWS secrets"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => setAwsModal(true)}>
+              Associate AWS secret
+            </Button>
+          }
+        />
+        {awsSecrets.length === 0 ? (
+          <CardBody>
+            <EmptyState message="No AWS secrets mapped. Associate one from AWS Secrets Manager." />
+          </CardBody>
+        ) : (
+          <Table>
+            <THead columns={['Key', 'Scope', 'AWS name', 'Region', '']} />
+            <tbody>
+              {awsSecrets.map((s) => (
+                <TRow key={s.id}>
+                  <TCell className="font-mono font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      {s.key}
+                      <Badge tone="info">AWS</Badge>
+                    </span>
+                  </TCell>
+                  <TCell>
+                    <Badge tone={s.environment_id ? 'info' : 'neutral'}>{s.scope}</Badge>
+                  </TCell>
+                  <TCell className="font-mono text-xs text-text-secondary">{s.aws_name}</TCell>
+                  <TCell className="text-text-secondary">{s.aws_region}</TCell>
+                  <TCell className="text-right">
+                    <Button size="sm" variant="ghost" onClick={() => setAwsDetach(s)}>
+                      Detach
+                    </Button>
+                  </TCell>
+                </TRow>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+
+      {/* Associate AWS secret modal ---------------------------------------- */}
+      <Modal
+        open={awsModal}
+        onClose={() => setAwsModal(false)}
+        title="Associate AWS secret"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAwsModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={associateAws.isPending || !awsForm.aws_arn}
+              onClick={() => associateAws.mutate()}
+            >
+              {associateAws.isPending ? 'Associating…' : 'Associate'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field
+            label="AWS secret"
+            hint="Configure credentials under Administration → Settings → AWS Secrets Manager."
+          >
+            {awsCatalog.isFetching ? (
+              <Spinner label="Reading AWS…" />
+            ) : awsCatalog.error ? (
+              <div className="rounded-[var(--radius-sm)] border border-danger-border bg-danger-bg px-3 py-2 text-xs text-danger-fg">
+                {(awsCatalog.error as Error).message}
+              </div>
+            ) : (
+              <Select
+                value={awsForm.aws_arn}
+                onChange={(e) => setAwsForm((f) => ({ ...f, aws_arn: e.target.value }))}
+              >
+                <option value="">Select an AWS secret…</option>
+                {(awsCatalog.data?.aws_secrets ?? []).map((s) => (
+                  <option key={s.aws_arn} value={s.aws_arn}>
+                    {s.aws_name} ({s.aws_region})
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="Scope" hint="Pin to one environment, or leave for all environments.">
+            <Select
+              value={awsForm.environment_id}
+              onChange={(e) => setAwsForm((f) => ({ ...f, environment_id: e.target.value }))}
+            >
+              <option value="">All environments</option>
+              {project.environments.map((env) => (
+                <option key={env.id} value={env.id}>
+                  {env.display_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={awsDetach !== null}
+        title="Detach AWS secret"
+        message={
+          awsDetach
+            ? `Detach "${awsDetach.key}" from this project? The AWS secret itself is not affected.`
+            : ''
+        }
+        confirmLabel="Detach"
+        danger
+        pending={detachAws.isPending}
+        onCancel={() => setAwsDetach(null)}
+        onConfirm={() => awsDetach && detachAws.mutate(awsDetach.id)}
+      />
 
       {/* Members ----------------------------------------------------------- */}
       <Card>
