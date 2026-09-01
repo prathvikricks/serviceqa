@@ -9,6 +9,7 @@ export interface User {
   is_admin: boolean
   is_devops: boolean
   is_developer: boolean
+  mfa_enabled: boolean
   created_at: string | null
 }
 

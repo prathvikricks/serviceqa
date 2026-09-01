@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Inbox,
   KeyRound,
+  KeySquare,
   LayoutDashboard,
   LogOut,
   LifeBuoy,
@@ -72,6 +73,8 @@ const NAV: NavGroup[] = [
     title: 'Administration',
     items: [
       { to: '/admin/projects', label: 'Projects', icon: FolderKanban, show: (u) => u.is_admin },
+      { to: '/admin/aws-secrets', label: 'AWS Secrets', icon: KeySquare,
+        show: (u) => u.is_admin },
       { to: '/admin/users', label: 'Users', icon: Users, show: (u) => u.is_admin },
       { to: '/admin/audit', label: 'Audit Log', icon: ScrollText, show: (u) => u.is_admin },
       { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, show: (u) => u.is_admin },

@@ -2,10 +2,26 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { api, ApiError } from '../lib/api'
 import type { User } from '../lib/types'
 
+/** Outcome of the password step. MFA is mandatory, so a first-time user is sent
+ *  to enrollment and everyone else to the code step. */
+export type LoginResult = 'ok' | 'mfa_required' | 'mfa_setup_required'
+
+export interface MfaSetup {
+  secret: string
+  otpauth_uri: string
+  qr_svg: string
+}
+
 interface AuthState {
   user: User | null
   loading: boolean
-  login: (username: string, password: string, remember: boolean) => Promise<void>
+  login: (username: string, password: string, remember: boolean) => Promise<LoginResult>
+  /** Enrolled user: submit the authenticator code to finish logging in. */
+  verifyMfa: (code: string) => Promise<void>
+  /** First login: mint a secret + QR to scan. */
+  setupMfa: () => Promise<MfaSetup>
+  /** First login: confirm the scanned code, enroll, and log in. */
+  confirmMfa: (code: string) => Promise<void>
   logout: () => Promise<void>
   /** Re-fetch the current user (e.g. after an admin changes your own role). */
   refresh: () => Promise<void>
@@ -31,12 +47,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
-  async function login(username: string, password: string, remember: boolean) {
-    const res = await api.post<{ user: User }>('/auth/login', {
-      username,
-      password,
-      remember_me: remember,
-    })
+  async function login(username: string, password: string, remember: boolean): Promise<LoginResult> {
+    const res = await api.post<{
+      user?: User
+      mfa_required?: boolean
+      mfa_setup_required?: boolean
+    }>('/auth/login', { username, password, remember_me: remember })
+    if (res.user) {
+      setUser(res.user)
+      return 'ok'
+    }
+    return res.mfa_setup_required ? 'mfa_setup_required' : 'mfa_required'
+  }
+
+  async function verifyMfa(code: string) {
+    const res = await api.post<{ user: User }>('/auth/login/verify', { code })
+    setUser(res.user)
+  }
+
+  async function setupMfa(): Promise<MfaSetup> {
+    return api.post<MfaSetup>('/auth/mfa/setup')
+  }
+
+  async function confirmMfa(code: string) {
+    const res = await api.post<{ user: User }>('/auth/mfa/confirm', { code })
     setUser(res.user)
   }
 
@@ -54,7 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, verifyMfa, setupMfa, confirmMfa, logout, refresh }}
+    >
       {children}
     </AuthContext.Provider>
   )
