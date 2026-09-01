@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Copy, Eye, EyeOff, Lock } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
-import type { ProjectSecret } from '../admin/adminTypes'
+import type { AttachedSharedSecret, ProjectSecret } from '../admin/adminTypes'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody } from '../../components/ui/Card'
@@ -21,12 +21,32 @@ interface SecretsResponse {
   can_reveal: boolean
 }
 
+interface SharedResponse {
+  shared_secrets: AttachedSharedSecret[]
+  can_reveal: boolean
+}
+
+/** A single row in the merged view — a project's own secret or a shared one.
+ *  `rowKey` namespaces the two id spaces so React keys and the revealed-value
+ *  map never collide (own #5 vs shared attachment #5). */
+interface SecretRow {
+  rowKey: string
+  id: number
+  key: string
+  scope: string
+  environment_id: number | null
+  description: string | null
+  can_reveal: boolean
+  shared: boolean
+  source?: 'manual' | 'aws'
+}
+
 export function SecretsPage() {
   const { notify } = useToast()
   const [projectId, setProjectId] = useState<number | null>(null)
   /** Revealed values, held in memory only and cleared whenever we switch project. */
-  const [revealed, setRevealed] = useState<Record<number, string>>({})
-  const [revealing, setRevealing] = useState<number | null>(null)
+  const [revealed, setRevealed] = useState<Record<string, string>>({})
+  const [revealing, setRevealing] = useState<string | null>(null)
 
   // Membership-scoped by the backend, so a developer only ever picks from
   // projects they belong to.
@@ -46,19 +66,26 @@ export function SecretsPage() {
     enabled: projectId !== null,
   })
 
+  const sharedQuery = useQuery({
+    queryKey: ['shared-secrets', 'project', projectId],
+    queryFn: () => api.get<SharedResponse>(`/projects/${projectId}/shared-secrets`),
+    enabled: projectId !== null,
+  })
+
   function selectProject(id: number) {
     // Don't carry one project's plaintext over to another's screen.
     setRevealed({})
     setProjectId(id)
   }
 
-  async function reveal(secret: ProjectSecret) {
-    setRevealing(secret.id)
+  async function reveal(row: SecretRow) {
+    setRevealing(row.rowKey)
     try {
-      const res = await api.post<{ value: string }>(
-        `/projects/${projectId}/secrets/${secret.id}/reveal`,
-      )
-      setRevealed((prev) => ({ ...prev, [secret.id]: res.value }))
+      const path = row.shared
+        ? `/projects/${projectId}/shared-secrets/${row.id}/reveal`
+        : `/projects/${projectId}/secrets/${row.id}/reveal`
+      const res = await api.post<{ value: string }>(path)
+      setRevealed((prev) => ({ ...prev, [row.rowKey]: res.value }))
     } catch (err) {
       notify(err instanceof ApiError ? err.message : 'Could not reveal that secret.', 'danger')
     } finally {
@@ -66,10 +93,10 @@ export function SecretsPage() {
     }
   }
 
-  function hide(id: number) {
+  function hide(rowKey: string) {
     setRevealed((prev) => {
       const next = { ...prev }
-      delete next[id]
+      delete next[rowKey]
       return next
     })
   }
@@ -94,8 +121,34 @@ export function SecretsPage() {
     )
   }
 
-  const secrets = secretsQuery.data?.secrets ?? []
-  const canReveal = secretsQuery.data?.can_reveal ?? false
+  // Own secrets first, then shared ones — merged into a single table.
+  const rows: SecretRow[] = [
+    ...(secretsQuery.data?.secrets ?? []).map((s) => ({
+      rowKey: `p-${s.id}`,
+      id: s.id,
+      key: s.key,
+      scope: s.scope,
+      environment_id: s.environment_id,
+      description: s.description,
+      can_reveal: s.can_reveal,
+      shared: false,
+      source: s.source,
+    })),
+    ...(sharedQuery.data?.shared_secrets ?? []).map((s) => ({
+      rowKey: `s-${s.id}`,
+      id: s.id,
+      key: s.key,
+      scope: s.scope,
+      environment_id: s.environment_id,
+      description: s.description,
+      can_reveal: s.can_reveal,
+      shared: true,
+    })),
+  ]
+
+  const isLoading = secretsQuery.isLoading || sharedQuery.isLoading
+  const loadError = secretsQuery.error || sharedQuery.error
+  const canReveal = secretsQuery.data?.can_reveal ?? sharedQuery.data?.can_reveal ?? false
 
   return (
     <div className="space-y-6">
@@ -119,7 +172,7 @@ export function SecretsPage() {
         }
       />
 
-      {!canReveal && secrets.length > 0 && (
+      {!canReveal && rows.length > 0 && (
         <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-info-border bg-info-bg px-3 py-2 text-sm text-info-fg">
           <Lock size={15} className="shrink-0" />
           You can see which secrets exist, but not their values. Ask an admin to grant
@@ -129,23 +182,24 @@ export function SecretsPage() {
 
       <Card>
         <CardBody className="p-0">
-          {secretsQuery.isLoading ? (
+          {isLoading ? (
             <Spinner />
-          ) : secretsQuery.error ? (
+          ) : loadError ? (
             <ErrorState message="Could not load secrets for this project." />
-          ) : secrets.length === 0 ? (
+          ) : rows.length === 0 ? (
             <EmptyState message="No secrets stored for this project." />
           ) : (
             <Table>
               <THead columns={['Key', 'Scope', 'Value', 'Description', '']} />
               <tbody>
-                {secrets.map((s) => {
-                  const value = revealed[s.id]
+                {rows.map((s) => {
+                  const value = revealed[s.rowKey]
                   return (
-                    <TRow key={s.id}>
+                    <TRow key={s.rowKey}>
                       <TCell className="font-mono font-medium">
                         <span className="inline-flex items-center gap-1.5">
                           {s.key}
+                          {s.shared && <Badge tone="info">Shared</Badge>}
                           {s.source === 'aws' && <Badge tone="info">AWS</Badge>}
                         </span>
                       </TCell>
@@ -168,7 +222,7 @@ export function SecretsPage() {
                             <Button size="sm" variant="secondary" onClick={() => copy(value)}>
                               <Copy size={14} /> Copy
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => hide(s.id)}>
+                            <Button size="sm" variant="ghost" onClick={() => hide(s.rowKey)}>
                               <EyeOff size={14} /> Hide
                             </Button>
                           </div>
@@ -176,10 +230,10 @@ export function SecretsPage() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            disabled={revealing === s.id}
+                            disabled={revealing === s.rowKey}
                             onClick={() => reveal(s)}
                           >
-                            <Eye size={14} /> {revealing === s.id ? 'Revealing…' : 'Reveal'}
+                            <Eye size={14} /> {revealing === s.rowKey ? 'Revealing…' : 'Reveal'}
                           </Button>
                         )}
                       </TCell>

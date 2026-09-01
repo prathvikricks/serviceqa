@@ -16,9 +16,11 @@ import type {
   AdminProjectDetail,
   AdminService,
   AdminUser,
+  AttachedSharedSecret,
   DiscoveredResource,
   ProjectSecret,
   ResourceGroup,
+  SharedSecret,
 } from './adminTypes'
 
 interface SecretForm {
@@ -204,6 +206,53 @@ export function ProjectDetailPage() {
     onError: (err: Error) => notify(err.message, 'danger'),
   })
 
+  // --- Shared secrets (catalog attachments) ---------------------------------
+  const attachedQuery = useQuery({
+    queryKey: ['shared-secrets', 'project', id],
+    queryFn: () =>
+      api.get<{ shared_secrets: AttachedSharedSecret[] }>(`/projects/${id}/shared-secrets`),
+  })
+  const attached = attachedQuery.data?.shared_secrets ?? []
+
+  // The catalog to pick from when attaching. Fetched lazily (only when the
+  // attach modal opens) so the project page doesn't always hit the admin route.
+  const [attachModal, setAttachModal] = useState(false)
+  const [attachForm, setAttachForm] = useState({ shared_secret_id: '', environment_id: '' })
+  const [detachTarget, setDetachTarget] = useState<AttachedSharedSecret | null>(null)
+
+  const catalogQuery = useQuery({
+    queryKey: ['shared-secrets'],
+    queryFn: () => api.get<{ shared_secrets: SharedSecret[] }>('/admin/shared-secrets'),
+    enabled: attachModal,
+  })
+
+  const attachSecret = useMutation({
+    mutationFn: () =>
+      api.post(`/admin/projects/${id}/shared-secrets`, {
+        shared_secret_id: Number(attachForm.shared_secret_id),
+        environment_id: attachForm.environment_id || null,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['shared-secrets', 'project', id] })
+      qc.invalidateQueries({ queryKey: ['shared-secrets'] })
+      notify('Shared secret attached.', 'success')
+      setAttachModal(false)
+      setAttachForm({ shared_secret_id: '', environment_id: '' })
+    },
+    onError: (err: Error) => notify(err.message, 'danger'),
+  })
+
+  const detachSecret = useMutation({
+    mutationFn: (aid: number) => api.delete(`/admin/projects/${id}/shared-secrets/${aid}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['shared-secrets', 'project', id] })
+      qc.invalidateQueries({ queryKey: ['shared-secrets'] })
+      notify('Shared secret detached.', 'success')
+      setDetachTarget(null)
+    },
+    onError: (err: Error) => notify(err.message, 'danger'),
+  })
+
   // --- Members --------------------------------------------------------------
   const [memberModal, setMemberModal] = useState(false)
   const [memberUsername, setMemberUsername] = useState('')
@@ -377,6 +426,121 @@ export function ProjectDetailPage() {
           </Table>
         )}
       </Card>
+
+      {/* Shared secrets (from the catalog) --------------------------------- */}
+      <Card>
+        <CardHeader
+          title="Shared secrets"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => setAttachModal(true)}>
+              Attach shared secret
+            </Button>
+          }
+        />
+        {attached.length === 0 ? (
+          <CardBody>
+            <EmptyState message="No shared secrets attached. Attach one from the catalog." />
+          </CardBody>
+        ) : (
+          <Table>
+            <THead columns={['Key', 'Scope', 'Description', '']} />
+            <tbody>
+              {attached.map((s) => (
+                <TRow key={s.id}>
+                  <TCell className="font-mono font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      {s.key}
+                      <Badge tone="info">Shared</Badge>
+                    </span>
+                  </TCell>
+                  <TCell>
+                    <Badge tone={s.environment_id ? 'info' : 'neutral'}>{s.scope}</Badge>
+                  </TCell>
+                  <TCell className="text-text-secondary">{s.description ?? '—'}</TCell>
+                  <TCell className="text-right">
+                    <Button size="sm" variant="ghost" onClick={() => setDetachTarget(s)}>
+                      Detach
+                    </Button>
+                  </TCell>
+                </TRow>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+
+      {/* Attach shared secret modal ---------------------------------------- */}
+      <Modal
+        open={attachModal}
+        onClose={() => setAttachModal(false)}
+        title="Attach shared secret"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAttachModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={attachSecret.isPending || !attachForm.shared_secret_id}
+              onClick={() => attachSecret.mutate()}
+            >
+              {attachSecret.isPending ? 'Attaching…' : 'Attach'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field
+            label="Shared secret"
+            hint="Manage the catalog under Administration → Secret Catalog."
+          >
+            <Select
+              value={attachForm.shared_secret_id}
+              onChange={(e) =>
+                setAttachForm((f) => ({ ...f, shared_secret_id: e.target.value }))
+              }
+            >
+              <option value="">
+                {catalogQuery.isFetching ? 'Loading catalog…' : 'Select a shared secret…'}
+              </option>
+              {(catalogQuery.data?.shared_secrets ?? []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.key}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Scope" hint="Pin to one environment, or leave for all environments.">
+            <Select
+              value={attachForm.environment_id}
+              onChange={(e) =>
+                setAttachForm((f) => ({ ...f, environment_id: e.target.value }))
+              }
+            >
+              <option value="">All environments</option>
+              {project.environments.map((env) => (
+                <option key={env.id} value={env.id}>
+                  {env.display_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={detachTarget !== null}
+        title="Detach shared secret"
+        message={
+          detachTarget
+            ? `Detach "${detachTarget.key}" from this project? The catalog secret itself is not deleted.`
+            : ''
+        }
+        confirmLabel="Detach"
+        danger
+        pending={detachSecret.isPending}
+        onCancel={() => setDetachTarget(null)}
+        onConfirm={() => detachTarget && detachSecret.mutate(detachTarget.id)}
+      />
 
       {/* Members ----------------------------------------------------------- */}
       <Card>

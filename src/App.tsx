@@ -23,6 +23,7 @@ import { ProjectFormPage } from './features/admin/ProjectFormPage'
 import { ProjectDetailPage } from './features/admin/ProjectDetailPage'
 import { CostsPage } from './features/admin/CostsPage'
 import { UsersPage } from './features/admin/UsersPage'
+import { SecretCatalogPage } from './features/admin/SecretCatalogPage'
 import { SettingsPage } from './features/admin/SettingsPage'
 import { LlmSettingsPage } from './features/admin/LlmSettingsPage'
 import { MailSettingsPage } from './features/admin/MailSettingsPage'
@@ -72,6 +73,7 @@ export default function App() {
                 <Route path="/admin/projects/:id/edit" element={<ProjectFormPage />} />
                 <Route path="/admin/projects/:id/costs" element={<CostsPage />} />
                 <Route path="/admin/users" element={<UsersPage />} />
+                <Route path="/admin/secret-catalog" element={<SecretCatalogPage />} />
                 <Route path="/admin/audit" element={<AuditLogPage />} />
                 <Route path="/admin/settings" element={<SettingsPage />} />
                 <Route path="/admin/settings/llm" element={<LlmSettingsPage />} />

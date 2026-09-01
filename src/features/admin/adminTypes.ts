@@ -83,7 +83,38 @@ export interface ProjectSecret {
   source: 'manual' | 'aws'
   /** ISO timestamp of the last AWS sync, or null for manual secrets. */
   synced_at: string | null
+  /** True when this row is a shared-catalog secret attached to the project,
+   *  rather than a secret owned by the project. Only set on the viewer. */
+  shared?: boolean
   /** Whether the CURRENT user may reveal it — display hint, not the check. */
+  can_reveal: boolean
+}
+
+/** A secret in the central catalog (GET /admin/shared-secrets). Value never returned. */
+export interface SharedSecret {
+  id: number
+  key: string
+  description: string | null
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+  /** How many project scopes this secret is attached to. */
+  attachment_count: number
+}
+
+/** A shared secret as attached to a project (GET /projects/<id>/shared-secrets).
+ *  `id` is the ATTACHMENT id — what reveal and detach operate on. */
+export interface AttachedSharedSecret {
+  id: number
+  shared_secret_id: number
+  project_id: number
+  environment_id: number | null
+  scope: string
+  key: string
+  description: string | null
+  created_by: string | null
+  attached_at: string | null
+  shared: true
   can_reveal: boolean
 }
 
