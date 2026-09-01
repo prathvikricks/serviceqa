@@ -143,7 +143,12 @@ export function SecretsPage() {
                   const value = revealed[s.id]
                   return (
                     <TRow key={s.id}>
-                      <TCell className="font-mono font-medium">{s.key}</TCell>
+                      <TCell className="font-mono font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          {s.key}
+                          {s.source === 'aws' && <Badge tone="info">AWS</Badge>}
+                        </span>
+                      </TCell>
                       <TCell>
                         <Badge tone={s.environment_id ? 'info' : 'neutral'}>{s.scope}</Badge>
                       </TCell>

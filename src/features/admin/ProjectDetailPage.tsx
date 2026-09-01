@@ -54,6 +54,16 @@ interface ServiceForm {
   hourly_cost: string
 }
 
+/** Result of POST /admin/projects/<id>/secrets/sync. */
+interface SyncResult {
+  created: number
+  updated: number
+  skipped: { key: string; reason: string }[]
+  missing_in_aws: number
+  tag: string
+  region: string
+}
+
 export function ProjectDetailPage() {
   const { id } = useParams()
   const qc = useQueryClient()
@@ -179,6 +189,21 @@ export function ProjectDetailPage() {
     onError: (err: Error) => notify(err.message, 'danger'),
   })
 
+  // Pull AWS Secrets Manager entries tagged Project=<slug> into this project's
+  // secrets, using the project's own AWS credentials. Admin-only, AWS + real
+  // mode only (the button is hidden otherwise).
+  const syncSecrets = useMutation({
+    mutationFn: () => api.post<SyncResult>(`/admin/projects/${id}/secrets/sync`),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['secrets', id] })
+      const parts = [`${r.created} added`, `${r.updated} updated`]
+      if (r.skipped.length) parts.push(`${r.skipped.length} skipped`)
+      if (r.missing_in_aws) parts.push(`${r.missing_in_aws} no longer in AWS`)
+      notify(`Synced from AWS (${r.tag}): ${parts.join(', ')}.`, 'success')
+    },
+    onError: (err: Error) => notify(err.message, 'danger'),
+  })
+
   // --- Members --------------------------------------------------------------
   const [memberModal, setMemberModal] = useState(false)
   const [memberUsername, setMemberUsername] = useState('')
@@ -297,9 +322,22 @@ export function ProjectDetailPage() {
         <CardHeader
           title="Secrets"
           action={
-            <Button size="sm" onClick={() => openSecret(null)}>
-              Add Secret
-            </Button>
+            <div className="flex items-center gap-2">
+              {project.cloud_provider === 'aws' && project.mode === 'real' && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={syncSecrets.isPending}
+                  onClick={() => syncSecrets.mutate()}
+                  title={`Import AWS Secrets Manager secrets tagged Project=${project.slug}`}
+                >
+                  {syncSecrets.isPending ? 'Syncing…' : 'Sync from AWS'}
+                </Button>
+              )}
+              <Button size="sm" onClick={() => openSecret(null)}>
+                Add Secret
+              </Button>
+            </div>
           }
         />
         {secrets.length === 0 ? (
@@ -312,7 +350,12 @@ export function ProjectDetailPage() {
             <tbody>
               {secrets.map((sec) => (
                 <TRow key={sec.id}>
-                  <TCell className="font-mono font-medium">{sec.key}</TCell>
+                  <TCell className="font-mono font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      {sec.key}
+                      {sec.source === 'aws' && <Badge tone="info">AWS</Badge>}
+                    </span>
+                  </TCell>
                   <TCell>
                     <Badge tone={sec.environment_id ? 'info' : 'neutral'}>{sec.scope}</Badge>
                   </TCell>

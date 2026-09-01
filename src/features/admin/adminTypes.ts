@@ -79,6 +79,10 @@ export interface ProjectSecret {
   created_by: string | null
   created_at: string | null
   updated_at: string | null
+  /** 'manual' = created/edited in-app; 'aws' = pulled from AWS Secrets Manager. */
+  source: 'manual' | 'aws'
+  /** ISO timestamp of the last AWS sync, or null for manual secrets. */
+  synced_at: string | null
   /** Whether the CURRENT user may reveal it — display hint, not the check. */
   can_reveal: boolean
 }
