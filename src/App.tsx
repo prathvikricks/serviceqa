@@ -28,6 +28,7 @@ import { LlmSettingsPage } from './features/admin/LlmSettingsPage'
 import { MailSettingsPage } from './features/admin/MailSettingsPage'
 import { AwsSettingsPage } from './features/admin/AwsSettingsPage'
 import { AwsSecretsPage } from './features/admin/AwsSecretsPage'
+import { AwsSecretDetailPage } from './features/admin/AwsSecretDetailPage'
 import { AuditLogPage } from './features/admin/AuditLogPage'
 import { NotFound } from './components/NotFound'
 
@@ -74,6 +75,7 @@ export default function App() {
                 <Route path="/admin/projects/:id/edit" element={<ProjectFormPage />} />
                 <Route path="/admin/projects/:id/costs" element={<CostsPage />} />
                 <Route path="/admin/aws-secrets" element={<AwsSecretsPage />} />
+                <Route path="/admin/aws-secrets/:arn" element={<AwsSecretDetailPage />} />
                 <Route path="/admin/users" element={<UsersPage />} />
                 <Route path="/admin/audit" element={<AuditLogPage />} />
                 <Route path="/admin/settings" element={<SettingsPage />} />

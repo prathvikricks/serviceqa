@@ -92,6 +92,16 @@ export interface AwsSecretListing {
   mappings: { assoc_id: number; project_id: number; project_name: string | null; scope: string }[]
 }
 
+/** One AWS secret's detail (GET /admin/aws-secrets/detail?arn=). No value. */
+export interface AwsSecretDetail {
+  aws_arn: string
+  aws_name: string
+  aws_region: string
+  description: string | null
+  last_changed: string | null
+  mappings: AwsSecretListing['mappings']
+}
+
 /** An AWS secret mapped to a project (GET /projects/<id>/aws-secrets).
  *  `id` is the mapping id — what reveal and dissociate operate on. */
 export interface ProjectAwsSecret {

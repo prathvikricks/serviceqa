@@ -1,17 +1,18 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Eye, EyeOff } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody } from '../../components/ui/Card'
-import { Field, Select } from '../../components/ui/Input'
+import { Field, Input, Select } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 import { Table, THead, TRow, TCell } from '../../components/ui/Table'
 import { PageHeader, Spinner, ErrorState, EmptyState } from '../../components/ui/Page'
 import { useToast } from '../../components/ui/Toast'
-import type { AdminProject, AdminProjectDetail, AwsSecretListing } from './adminTypes'
+import { MapModal } from './AwsMapModal'
+import type { AwsSecretListing } from './adminTypes'
 
 const AWS_REGIONS = [
   'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'ca-central-1',
@@ -25,12 +26,15 @@ interface AwsSecretsResponse {
   aws_secrets: AwsSecretListing[]
 }
 
+const secretPath = (arn: string) => `/admin/aws-secrets/${encodeURIComponent(arn)}`
+
 /**
  * Central AWS Secrets Manager: lists every secret in the AWS account (live) and
  * maps them to projects. Values are read live from AWS; nothing is stored here.
  */
 export function AwsSecretsPage() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const { notify } = useToast()
   const [region, setRegion] = useState('')
 
@@ -44,6 +48,7 @@ export function AwsSecretsPage() {
   const [revealed, setRevealed] = useState<Record<string, string>>({})
   const [revealing, setRevealing] = useState<string | null>(null)
   const [mapTarget, setMapTarget] = useState<AwsSecretListing | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
 
   async function reveal(row: AwsSecretListing) {
     setRevealing(row.aws_arn)
@@ -88,8 +93,8 @@ export function AwsSecretsPage() {
   })
 
   // Not-configured: the endpoint returns 409 with configured:false.
-  const notConfigured =
-    error instanceof ApiError && error.status === 409
+  const notConfigured = error instanceof ApiError && error.status === 409
+  const currentRegion = region || (data?.region ?? '')
 
   return (
     <div className="space-y-6">
@@ -97,19 +102,24 @@ export function AwsSecretsPage() {
         title="AWS Secrets"
         subtitle="Secrets read live from AWS Secrets Manager. Map them to projects; values stay in AWS."
         action={
-          <Field label="Region">
-            <Select
-              value={region || (data?.region ?? '')}
-              onChange={(e) => setRegion(e.target.value)}
-              className="w-auto"
-            >
-              {AWS_REGIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div className="flex items-end gap-2">
+            <Field label="Region">
+              <Select
+                value={currentRegion}
+                onChange={(e) => setRegion(e.target.value)}
+                className="w-auto"
+              >
+                {AWS_REGIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {!notConfigured && (
+              <Button onClick={() => setCreateOpen(true)}>New secret</Button>
+            )}
+          </div>
         }
       />
 
@@ -141,7 +151,11 @@ export function AwsSecretsPage() {
                     const value = revealed[s.aws_arn]
                     return (
                       <TRow key={s.aws_arn}>
-                        <TCell className="font-mono font-medium">{s.aws_name}</TCell>
+                        <TCell className="font-mono font-medium">
+                          <Link to={secretPath(s.aws_arn)} className="text-accent hover:underline">
+                            {s.aws_name}
+                          </Link>
+                        </TCell>
                         <TCell className="text-text-secondary">{s.aws_region}</TCell>
                         <TCell className="font-mono text-text-secondary">
                           {value !== undefined ? (
@@ -156,10 +170,7 @@ export function AwsSecretsPage() {
                           ) : (
                             <div className="flex flex-wrap gap-1.5">
                               {s.mappings.map((m) => (
-                                <span
-                                  key={m.assoc_id}
-                                  className="inline-flex items-center gap-1"
-                                >
+                                <span key={m.assoc_id} className="inline-flex items-center gap-1">
                                   <Badge tone="info">
                                     {m.project_name} · {m.scope}
                                   </Badge>
@@ -203,7 +214,7 @@ export function AwsSecretsPage() {
                               </Button>
                             )}
                             <Button size="sm" onClick={() => setMapTarget(s)}>
-                              Map to project
+                              Map
                             </Button>
                           </div>
                         </TCell>
@@ -227,49 +238,50 @@ export function AwsSecretsPage() {
           }}
         />
       )}
+
+      {createOpen && (
+        <CreateModal
+          region={currentRegion}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(arn) => {
+            setCreateOpen(false)
+            qc.invalidateQueries({ queryKey: ['admin', 'aws-secrets'] })
+            navigate(secretPath(arn))
+          }}
+        />
+      )}
     </div>
   )
 }
 
 // --------------------------------------------------------------------------
-// Map-to-project modal — pick a project, optional environment, then associate.
+// Create-secret modal — writes a new secret to AWS, then opens its detail page.
 // --------------------------------------------------------------------------
 
-function MapModal({
-  secret,
+function CreateModal({
+  region,
   onClose,
-  onDone,
+  onCreated,
 }: {
-  secret: AwsSecretListing
+  region: string
   onClose: () => void
-  onDone: () => void
+  onCreated: (arn: string) => void
 }) {
   const { notify } = useToast()
-  const [projectId, setProjectId] = useState('')
-  const [environmentId, setEnvironmentId] = useState('')
+  const [form, setForm] = useState({ name: '', value: '', description: '' })
+  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }))
 
-  const projectsQuery = useQuery({
-    queryKey: ['admin', 'projects'],
-    queryFn: () => api.get<{ projects: AdminProject[] }>('/admin/projects'),
-  })
-  // Environments come from the selected project's detail.
-  const detailQuery = useQuery({
-    queryKey: ['admin', 'projects', projectId],
-    queryFn: () => api.get<AdminProjectDetail>(`/admin/projects/${projectId}`),
-    enabled: !!projectId,
-  })
-
-  const associate = useMutation({
+  const create = useMutation({
     mutationFn: () =>
-      api.post(`/admin/projects/${projectId}/aws-secrets`, {
-        aws_arn: secret.aws_arn,
-        aws_name: secret.aws_name,
-        aws_region: secret.aws_region,
-        environment_id: environmentId || null,
+      api.post<{ aws_arn: string }>('/admin/aws-secrets', {
+        name: form.name,
+        value: form.value,
+        description: form.description,
+        region,
       }),
-    onSuccess: () => {
-      notify('Mapped to project.', 'success')
-      onDone()
+    onSuccess: (r) => {
+      notify('Secret created in AWS.', 'success')
+      onCreated(r.aws_arn)
     },
     onError: (err: Error) => notify(err.message, 'danger'),
   })
@@ -278,50 +290,40 @@ function MapModal({
     <Modal
       open
       onClose={onClose}
-      title={`Map ${secret.aws_name}`}
+      title="New AWS secret"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={associate.isPending || !projectId} onClick={() => associate.mutate()}>
-            {associate.isPending ? 'Mapping…' : 'Map'}
+          <Button
+            disabled={create.isPending || !form.name.trim() || !form.value.trim()}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? 'Creating…' : 'Create'}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <Field label="Project">
-          <Select
-            value={projectId}
-            onChange={(e) => {
-              setProjectId(e.target.value)
-              setEnvironmentId('')
-            }}
-          >
-            <option value="">
-              {projectsQuery.isFetching ? 'Loading…' : 'Select a project…'}
-            </option>
-            {(projectsQuery.data?.projects ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+        <Field label="Name" hint={`Created in ${region || 'the default region'}.`}>
+          <Input
+            value={form.name}
+            onChange={(e) => set('name', e.target.value)}
+            placeholder="myapp/prod/DB_PASSWORD"
+            autoFocus
+          />
         </Field>
-        <Field label="Scope" hint="Pin to one environment, or leave for all environments.">
-          <Select
-            value={environmentId}
-            onChange={(e) => setEnvironmentId(e.target.value)}
-            disabled={!projectId}
-          >
-            <option value="">All environments</option>
-            {(detailQuery.data?.environments ?? []).map((env) => (
-              <option key={env.id} value={env.id}>
-                {env.display_name}
-              </option>
-            ))}
-          </Select>
+        <Field label="Value">
+          <Input
+            type="password"
+            value={form.value}
+            onChange={(e) => set('value', e.target.value)}
+            autoComplete="new-password"
+          />
+        </Field>
+        <Field label="Description">
+          <Input value={form.description} onChange={(e) => set('description', e.target.value)} />
         </Field>
       </div>
     </Modal>
