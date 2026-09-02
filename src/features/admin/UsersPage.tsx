@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { UserPlus } from 'lucide-react'
+import { UserPlus, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
 import type { User } from '../../lib/types'
 import { Button } from '../../components/ui/Button'
@@ -11,6 +11,7 @@ import { Modal, ConfirmDialog } from '../../components/ui/Modal'
 import { Table, THead, TRow, TCell } from '../../components/ui/Table'
 import { EmptyState, ErrorState, PageHeader, Spinner } from '../../components/ui/Page'
 import { useToast } from '../../components/ui/Toast'
+import { useAuth } from '../../auth/AuthContext'
 
 interface RoleOption {
   value: string
@@ -28,10 +29,13 @@ const EMPTY = { username: '', email: '', password: '', role: 'developer' }
 export function UsersPage() {
   const qc = useQueryClient()
   const { notify } = useToast()
+  const { user: currentUser } = useAuth()
   const [open, setOpen] = useState(false)
   /** null = creating; a User = editing that user. */
   const [editing, setEditing] = useState<User | null>(null)
   const [form, setForm] = useState(EMPTY)
+  /** Every user-management action requires typing CONFIRM first. */
+  const [confirmText, setConfirmText] = useState('')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'users'],
@@ -44,6 +48,7 @@ export function UsersPage() {
   function openCreate() {
     setEditing(null)
     setForm({ ...EMPTY, role: roles[0]?.value ?? 'developer' })
+    setConfirmText('')
     setOpen(true)
   }
 
@@ -51,6 +56,7 @@ export function UsersPage() {
     setEditing(user)
     // Password stays blank on edit: submitting blank leaves it unchanged.
     setForm({ username: user.username, email: user.email, password: '', role: user.role })
+    setConfirmText('')
     setOpen(true)
   }
 
@@ -90,6 +96,19 @@ export function UsersPage() {
       setResetTarget(null)
     },
     onError: (err) => notify(err instanceof ApiError ? err.message : 'Reset failed.', 'danger'),
+  })
+
+  const [toggleTarget, setToggleTarget] = useState<User | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  const remove = useMutation({
+    mutationFn: (user: User) => api.delete(`/admin/users/${user.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+      notify('User deleted.', 'success')
+      setDeleteTarget(null)
+    },
+    // Surfaces the backend's "deactivate instead" message for users with activity.
+    onError: (err) => notify(err instanceof ApiError ? err.message : 'Delete failed.', 'danger'),
   })
 
   return (
@@ -152,9 +171,17 @@ export function UsersPage() {
                           size="sm"
                           variant="ghost"
                           disabled={toggleActive.isPending}
-                          onClick={() => toggleActive.mutate(user)}
+                          onClick={() => setToggleTarget(user)}
                         >
                           {user.is_active ? 'Disable' : 'Enable'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={user.id === currentUser?.id}
+                          onClick={() => setDeleteTarget(user)}
+                        >
+                          <Trash2 size={14} /> Delete
                         </Button>
                       </div>
                     </TCell>
@@ -175,7 +202,10 @@ export function UsersPage() {
             <Button variant="secondary" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            <Button
+              onClick={() => save.mutate()}
+              disabled={save.isPending || confirmText !== 'CONFIRM'}
+            >
               {save.isPending ? 'Saving…' : 'Save'}
             </Button>
           </>
@@ -221,6 +251,15 @@ export function UsersPage() {
               autoComplete="new-password"
             />
           </Field>
+
+          <Field label="Type CONFIRM to save">
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="CONFIRM"
+              autoComplete="off"
+            />
+          </Field>
         </div>
       </Modal>
 
@@ -229,14 +268,54 @@ export function UsersPage() {
         title="Reset MFA"
         message={
           resetTarget
-            ? `Reset MFA for ${resetTarget.username}? They'll be prompted to enroll a new authenticator on their next login.`
+            ? `Reset MFA for ${resetTarget.username}? This clears their authenticator; they'll enroll a new one on their next login.`
             : ''
         }
         confirmLabel="Reset MFA"
+        confirmPhrase="CONFIRM"
         danger
         pending={resetMfa.isPending}
         onCancel={() => setResetTarget(null)}
         onConfirm={() => resetTarget && resetMfa.mutate(resetTarget)}
+      />
+
+      <ConfirmDialog
+        open={toggleTarget !== null}
+        title={toggleTarget?.is_active ? 'Disable user' : 'Enable user'}
+        message={
+          toggleTarget
+            ? `${toggleTarget.is_active ? 'Disable' : 'Enable'} ${toggleTarget.username}? ${
+                toggleTarget.is_active
+                  ? 'They will not be able to sign in.'
+                  : 'They will be able to sign in again.'
+              }`
+            : ''
+        }
+        confirmLabel={toggleTarget?.is_active ? 'Disable' : 'Enable'}
+        confirmPhrase="CONFIRM"
+        danger={toggleTarget?.is_active ?? false}
+        pending={toggleActive.isPending}
+        onCancel={() => setToggleTarget(null)}
+        onConfirm={() =>
+          toggleTarget &&
+          toggleActive.mutate(toggleTarget, { onSuccess: () => setToggleTarget(null) })
+        }
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete user"
+        message={
+          deleteTarget
+            ? `Permanently delete ${deleteTarget.username}? This cannot be undone. Users with requests, approvals, projects, or secrets can't be deleted — deactivate them instead.`
+            : ''
+        }
+        confirmLabel="Delete user"
+        confirmPhrase="CONFIRM"
+        danger
+        pending={remove.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && remove.mutate(deleteTarget)}
       />
     </div>
   )

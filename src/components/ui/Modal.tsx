@@ -1,6 +1,7 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Button } from './Button'
+import { Field, Input } from './Input'
 import { overlayMotion, panelMotion } from '../../lib/motion'
 
 export function Modal({
@@ -62,6 +63,7 @@ export function ConfirmDialog({
   pendingLabel,
   danger = false,
   pending = false,
+  confirmPhrase,
   onConfirm,
   onCancel,
 }: {
@@ -72,9 +74,20 @@ export function ConfirmDialog({
   pendingLabel?: string
   danger?: boolean
   pending?: boolean
+  /** When set, the user must type this exact phrase before Confirm enables. */
+  confirmPhrase?: string
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const [typed, setTyped] = useState('')
+
+  // Reset the typed phrase whenever the dialog opens/closes.
+  useEffect(() => {
+    if (!open) setTyped('')
+  }, [open])
+
+  const phraseOk = !confirmPhrase || typed === confirmPhrase
+
   return (
     <Modal
       open={open}
@@ -87,7 +100,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             variant={danger ? 'danger' : 'primary'}
-            disabled={pending}
+            disabled={pending || !phraseOk}
             onClick={onConfirm}
           >
             {pending ? pendingLabel ?? 'Working…' : confirmLabel}
@@ -96,6 +109,19 @@ export function ConfirmDialog({
       }
     >
       {message}
+      {confirmPhrase && (
+        <div className="mt-4">
+          <Field label={`Type ${confirmPhrase} to proceed`}>
+            <Input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={confirmPhrase}
+              autoComplete="off"
+              disabled={pending}
+            />
+          </Field>
+        </div>
+      )}
     </Modal>
   )
 }
