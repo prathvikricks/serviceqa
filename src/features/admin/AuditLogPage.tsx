@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { Card } from '../../components/ui/Card'
@@ -34,6 +35,7 @@ function formatDate(iso: string | null): string {
 }
 
 export function AuditLogPage() {
+  const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [action, setAction] = useState('')
   const [entityType, setEntityType] = useState('')
@@ -95,7 +97,11 @@ export function AuditLogPage() {
             />
             <tbody>
               {data.entries.map((e) => (
-                <TRow key={e.id}>
+                <TRow
+                  key={e.id}
+                  onClick={() => navigate(`/admin/audit/${e.id}`)}
+                  className="cursor-pointer"
+                >
                   <TCell className="whitespace-nowrap text-text-secondary">
                     {formatDate(e.created_at)}
                   </TCell>

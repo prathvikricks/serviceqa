@@ -23,9 +23,18 @@ export function THead({ columns }: { columns: ReactNode[] }) {
   )
 }
 
-export function TRow({ children, className }: { children: ReactNode; className?: string }) {
+export function TRow({
+  children,
+  className,
+  onClick,
+}: {
+  children: ReactNode
+  className?: string
+  onClick?: () => void
+}) {
   return (
     <tr
+      onClick={onClick}
       className={cn(
         'border-b border-border-light transition-colors last:border-b-0 hover:bg-hover',
         className,

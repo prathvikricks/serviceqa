@@ -30,6 +30,7 @@ import { AwsSettingsPage } from './features/admin/AwsSettingsPage'
 import { AwsSecretsPage } from './features/admin/AwsSecretsPage'
 import { AwsSecretDetailPage } from './features/admin/AwsSecretDetailPage'
 import { AuditLogPage } from './features/admin/AuditLogPage'
+import { AuditLogDetailPage } from './features/admin/AuditLogDetailPage'
 import { NotFound } from './components/NotFound'
 
 const queryClient = new QueryClient({
@@ -78,6 +79,7 @@ export default function App() {
                 <Route path="/admin/aws-secrets/:arn" element={<AwsSecretDetailPage />} />
                 <Route path="/admin/users" element={<UsersPage />} />
                 <Route path="/admin/audit" element={<AuditLogPage />} />
+                <Route path="/admin/audit/:id" element={<AuditLogDetailPage />} />
                 <Route path="/admin/settings" element={<SettingsPage />} />
                 <Route path="/admin/settings/llm" element={<LlmSettingsPage />} />
                 <Route path="/admin/settings/mail" element={<MailSettingsPage />} />
